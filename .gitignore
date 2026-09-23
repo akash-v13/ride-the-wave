@@ -1,0 +1,34 @@
+# secrets
+.env
+alpaca_key.txt
+config/settings.yaml
+
+# runtime data
+data/*
+!data/README.md
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# os / editors
+.DS_Store
+.vscode/
+.idea/
+
+# reference books (copyrighted)
+docs/books/*.pdf
+docs/books/.DS_Store
+
+# reports are runtime output
+data/reports/
+
+# web (TypeScript API)
+web/node_modules/
+web/dist/

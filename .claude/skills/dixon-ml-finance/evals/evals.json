@@ -1,0 +1,23 @@
+{
+  "skill_name": "dixon-ml-finance",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Train a model on data/features/features-2026-06-01-2026-09-16-sip.parquet to predict whether a candidate entry wins, and tell me how much better it is than our three gates.",
+      "expected_output": "Runs or references the diagnostics first; uses day-level walk-forward folds with a verification slice, logistic regression as the first model, log-loss/AUC not accuracy, calibration on verification, evaluates in the replay engine on test days, and reports a Bayes factor or posterior against the reference rule rather than claiming improvement from a single split.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Our backtest says PF 1.25 on 116 trades and it was positive on both halves. Is that enough to go live with real money?",
+      "expected_output": "Says no with the book's reasoning: 116 trades is Example 2.4 territory, computes the win-rate posterior s.d. (~0.046) and/or the Bayes factor, notes gates were tuned in-sample, prediction != profit, non-stationarity, and proposes the walk-forward + evidence protocol before any live capital.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Can we use an LSTM on the last 30 one-minute bars to predict the next 10 minutes for each stock in the universe?",
+      "expected_output": "Points to the diagnostic (minute returns are white noise at low lags), the T=1 argument, the data-size mismatch with the book's examples, and recommends the tabular model ladder or slower bars instead; if the user insists, gives the book's protocol (ADF, PACF for sequence length, Ljung-Box residuals, walk-forward).",
+      "files": []
+    }
+  ]
+}

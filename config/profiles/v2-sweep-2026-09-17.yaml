@@ -1,0 +1,53 @@
+# PROFILE: v2-sweep-2026-09-17. Best parameter set from the time-slice sweep, BEFORE entry filters.
+# Jun-Sep 2026 (SIP, PIT top 50): 1,219 trades, PF 0.91, -$615. Kept for A/B comparison.
+
+alpaca:
+  paper: true            # the bot refuses to start if this is false
+  data_feed: iex         # free plan: iex only
+
+universe:
+  source: most_actives   # most_actives | movers | static
+  top: 100
+  static_symbols: []     # used when source: static
+  min_price: 5.0
+  max_price: 500.0
+  exchanges: [NYSE, NASDAQ, ARCA]
+  refresh_minutes: 30    # 0 = build once at start
+
+scan:
+  poll_interval_seconds: 15
+  warmup_minutes: 60     # historical bars loaded at start to seed streaks
+
+entry:
+  green_streak_minutes: 3    # was 5 (v1-original)
+  min_streak_gain_pct: 1.0   # was 0.5
+  min_streak_volume: 10000
+  max_positions: 5
+  position_size_pct: 10
+  entry_limit_buffer_pct: 0.1
+  entry_fill_timeout_seconds: 30
+  entry_start: "09:31"   # US/Eastern; was 09:40
+  entry_end: "11:30"     # was 15:00; afternoon entries lost ~3x faster in the sweep
+  max_entries_per_symbol_per_day: 1
+
+exit:
+  trail_pct: 1.5         # was 0.5
+  min_gain_pct: 0.5      # was 0.3
+  hard_stop_pct: 1.0     # set to 0 to disable the safety stop (not recommended)
+  max_hold_minutes: 60   # was 120
+  timeout_exit_only_if_profitable: true
+  flatten_at_close: true
+  flatten_time: "15:55"
+
+capital:
+  base_allocation: 10000
+  reinvest_gains_pct: 50
+  min_allocation_ratio: 0.5
+
+backtest:
+  slippage_pct: 0.05     # applied against you on every simulated fill
+  feed: sip              # sip | iex ; run both and compare
+
+storage:
+  db_path: data/ridethewave.db
+  log_dir: data/logs

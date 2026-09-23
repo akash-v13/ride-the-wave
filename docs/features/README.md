@@ -1,0 +1,22 @@
+# docs/features
+
+One page per feature, in plain English: what it does, how to use it, which settings affect it, what can go wrong.
+
+1. [Configuration and secrets](01-config-and-secrets.md)
+2. [Alpaca connection](02-alpaca-client.md)
+3. [Storage](03-storage.md)
+4. [Universe](04-universe.md)
+5. [Market data poller and minute bars](05-market-data-poller.md)
+6. [Wave Rider strategy](06-wave-rider-strategy.md)
+7. [Order execution](07-order-execution.md)
+8. [Backtester](08-backtester.md)
+9. [Dashboard](09-dashboard.md)
+10. [Daily ledger and reinvestment](10-daily-ledger-and-reinvestment.md)
+11. [Entry filters](11-entry-filters.md)
+12. [Volatility-scaled exits](12-volatility-scaled-exits.md)
+13. [Live feature recording](13-live-feature-recording.md)
+14. [Operator: running unattended](14-operator.md)
+15. [Multi-strategy core](15-multi-strategy.md)
+16. [Strategies on slower bars](16-fifteen-minute-bars.md)
+17. [Opening-range breakout (shadow)](17-opening-range-breakout.md)
+18. [TypeScript API and web UI](18-typescript-api.md)

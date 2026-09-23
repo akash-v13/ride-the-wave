@@ -1,0 +1,104 @@
+# Ride The Wave settings. Copy to settings.yaml and edit. Secrets go in .env, not here.
+# Every parameter is explained in docs/strategy.md.
+# Defaults = 2026-09-17 sweep best + the three entry filters validated in docs/research/2026-09-17-feature-analysis.md:
+# Jun-Sep 2026 (SIP, PIT top 50): 116 trades, PF 1.25, +$168; positive on both halves and on IEX. Thin but real.
+# Previous sets live in config/profiles/.
+
+alpaca:
+  paper: true            # the bot refuses to start if this is false
+  data_feed: iex         # free plan: iex. After the Algo Trader Plus upgrade: sip (check with scripts/check_env.py)
+
+universe:
+  source: most_actives   # most_actives | movers | static
+  top: 100
+  static_symbols: []     # used when source: static
+  min_price: 5.0
+  max_price: 500.0
+  exchanges: [NYSE, NASDAQ, ARCA]
+  refresh_minutes: 30    # 0 = build once at start
+
+scan:
+  poll_interval_seconds: 15
+  warmup_minutes: 60     # historical bars loaded at start to seed streaks
+
+entry:
+  green_streak_minutes: 3    # was 5 (v1-original)
+  min_streak_gain_pct: 1.0   # was 0.5
+  min_streak_volume: 10000
+  max_positions: 5
+  position_size_pct: 10
+  entry_limit_buffer_pct: 0.1
+  entry_fill_timeout_seconds: 30
+  entry_start: "09:31"   # US/Eastern; was 09:40
+  entry_end: "11:30"     # was 15:00; afternoon entries lost ~3x faster in the sweep
+  max_entries_per_symbol_per_day: 1
+  filters:                       # null = gate off. See docs/features/11-entry-filters.md
+    min_spy_ret_session_pct: 0.1 # market (SPY) must be up on the day
+    max_session_ret_pct: 0.6     # skip stocks that already ran
+    max_trade_count_ratio: 0.7   # streak made by fewer, larger trades
+
+exit:
+  trail_pct: 1.5         # was 0.5
+  min_gain_pct: 0.5      # was 0.3
+  hard_stop_pct: 1.0     # set to 0 to disable the safety stop (not recommended)
+  max_hold_minutes: 60   # was 120
+  timeout_exit_only_if_profitable: true
+  flatten_at_close: true
+  flatten_time: "15:55"
+
+capital:
+  base_allocation: 10000
+  reinvest_gains_pct: 50
+  min_allocation_ratio: 0.5
+
+backtest:
+  slippage_pct: 0.05     # applied against you on every simulated fill
+  feed: sip              # sip | iex ; run both and compare
+
+strategies:                    # accounting key `id`; `mode: shadow` = simulated fills on live prices, no orders
+  - id: wave_rider
+    kind: wave_rider
+    mode: live
+    weight: 1.0                # share of the daily allocation among live strategies
+  - id: spy_intraday
+    kind: spy_intraday
+    enabled: false             # FAILED the study (2016-2026: no effect, slightly reversed). Kept as the
+    mode: shadow               # market-timing template. docs/research/2026-09-21-spy-intraday-momentum.md
+    weight: 0.5
+    params:
+      threshold_bp: 10
+      decision_time: "15:30"
+      exit_time: "15:58"
+  - id: wave_rider_15m           # OBSERVATION ONLY: backtest PF 1.00 with the market gate (break-even), 0.89 without.
+    kind: wave_rider             # docs/research/2026-09-22-fifteen-minute-and-orb-backtests.md
+    mode: shadow
+    weight: 0.5
+    params:
+      bar_minutes: 15
+      entry: {entry_start: "09:30", entry_end: "11:30", green_streak_minutes: 3, min_streak_gain_pct: 1.0,
+              filters: {min_spy_ret_session_pct: 0.1, max_session_ret_pct: 0.6, max_trade_count_ratio: null}}
+      exit: {trail_pct: 1.0, min_gain_pct: 0.5, hard_stop_pct: 2.0, max_hold_minutes: 180}
+  - id: orb                      # OBSERVATION ONLY: long-only opening-range breakout, backtest PF 0.93 on the top-50 universe.
+    kind: orb
+    mode: shadow
+    weight: 0.5
+    params: {range_minutes: 15, rvol_min: 3.0, stop_atr: 0.1, risk_pct: 1.0, exit_time: "15:55"}
+
+risk:                          # kill switches, see docs/features/14-operator.md
+  max_daily_loss_pct: 2.0      # realised loss as % of allocation -> flatten and halt entries (0 disables)
+  max_open_loss_pct: 3.0       # realised + unrealised
+  winrate_floor_enabled: true
+  winrate_lookback_trades: 60
+  winrate_min_trades: 30
+  winrate_breakeven: null      # null = from average win / average loss of the lookback
+  winrate_halt_probability: 0.9
+
+operator:
+  report_times_et: ["09:00", "11:30", "14:00", "16:15", "21:00"]
+  heartbeat_stale_seconds: 90
+  notify: true                 # macOS notifications for alerts
+  report_dir: data/reports
+
+storage:
+  db_path: data/ridethewave.db
+  log_dir: data/logs

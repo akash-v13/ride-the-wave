@@ -1,0 +1,23 @@
+{
+  "skill_name": "typesafe-jev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to score news headlines for the stocks in my universe with Jev so I can drop anything with clearly negative news before the bot trades. Write the module for Ride The Wave, but I don't have an API key yet so it has to work with fake answers too.",
+      "expected_output": "A signals module behind an interface with a mock implementation, questions kept in one file, state built as a JSON object with computed fields (headline age) done in code, answers stored raw as features, thresholds in settings, and a note that thresholds need labeled data. No counting or date comparison asked of Jev.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "quick one: use jev to tell me whether this headline is good or bad for TSLA: 'Tesla recalls 1.2M vehicles over steering software fault'. just show me the call.",
+      "expected_output": "A single system_one call with a JSON state naming the symbol and headline, a Noul or Choice for direction plus maybe materiality, correct SDK import and response field access (.noul / .choice / .confidence), and a --dry-run or mock path since no key exists.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Can Jev count how many of these 40 headlines mention earnings and give me the average sentiment number for the day?",
+      "expected_output": "Explains Jev cannot count or average; proposes one Noul per headline (or a fan-out over an array state with per-item questions) and doing the count and mean in code; warns about state size and literal reading.",
+      "files": []
+    }
+  ]
+}

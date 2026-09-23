@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ride The Wave</title>
+<style>
+  :root { --bg:#fafaf8; --fg:#111; --muted:#6b6b6b; --line:#e2e2de; --up:#2a78d6; --down:#e34948; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151514; --fg:#eee; --muted:#a3a39c; --line:#2c2c2a; --card:#1d1d1b; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, system-ui, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; margin:18px 0 8px; color:var(--muted); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; } .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; min-width:140px; flex:1; }
+  .k { color:var(--muted); font-size:12px; } .v { font-size:18px; font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); } th { color:var(--muted); font-weight:600; font-size:12px; }
+  .pos { color:var(--up); } .neg { color:var(--down); } .muted { color:var(--muted); }
+  button { font:inherit; padding:6px 10px; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:6px; cursor:pointer; } button:hover { border-color:var(--fg); }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; } select { font:inherit; padding:6px; }
+  #report { white-space:pre-wrap; font-family:ui-monospace, Menlo, monospace; font-size:12.5px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; max-height:520px; overflow:auto; }
+  .tabs { display:flex; gap:4px; margin:8px 0; } .tabs button.on { border-color:var(--fg); font-weight:600; }
+</style>
+</head>
+<body>
+<h1>Ride The Wave <span id="bot" class="muted"></span></h1>
+<div class="muted" id="sub"></div>
+<div class="row" id="tiles"></div>
+<h2>Strategies</h2>
+<table id="strategies"><thead><tr><th>Strategy</th><th>Mode</th><th>Open</th><th>Trades</th><th>Realised today</th><th>Paused</th><th></th></tr></thead><tbody></tbody></table>
+<h2>Open positions</h2>
+<table id="positions"><thead><tr><th>Strategy</th><th>Symbol</th><th>Qty</th><th>Entry</th><th>Last</th><th>Sell if ≤</th><th>P/L</th><th>P/L %</th></tr></thead><tbody></tbody></table>
+<h2>Today's trades</h2>
+<table id="trades"><thead><tr><th>Strategy</th><th>Mode</th><th>Symbol</th><th>In</th><th>Out</th><th>Entry</th><th>Exit</th><th>P/L</th><th>P/L %</th><th>Why</th></tr></thead><tbody></tbody></table>
+<h2>Reports</h2>
+<div class="controls"><select id="reportPick"></select><button id="reloadReport">Reload</button></div>
+<pre id="report"></pre>
+<script src="/app.js"></script>
+</body>
+</html>
