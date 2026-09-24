@@ -19,3 +19,4 @@ Entry points. Each is a thin wrapper that loads config and calls into `ridethewa
 - `study_spy_intraday.py`: ten-year test of SPY first-half-hour → last-half-hour momentum. (research)
 - `study_news_jev.py fetch|score|analyze`: does Jev's reading of a headline predict forward returns? Fetches Alpaca news for the universe, scores with Jev (resumable), labels from cached bars, and tests against candidate entries. (research)
 - `operator_tick.py`: the five-minute operator tick: health check plus any due report or nightly job, decided in Eastern time. (phase 17)
+- `study_xs_signals.py`: cross-sectional diagnostic for the Kakushadze day-trade signals (overnight reversal, previous-day momentum, intraday reversal): quintile forward returns with day-block bootstrap, daily rank IC, gap buckets. (research)

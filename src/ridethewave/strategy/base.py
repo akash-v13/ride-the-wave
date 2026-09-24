@@ -40,6 +40,7 @@ class Strategy(ABC):
     flatten_at_close: bool = True
     uses_protective_stop: bool = True
     bar_minutes: int = 1  # the bar size on_bar receives; the runner and engine resample for it
+    stocks_only: bool = False  # True: the runner and backtester drop ETFs, ETNs and trusts from this strategy's symbols
 
     def symbols(self, universe: list[str]) -> list[str]:
         return list(universe)

@@ -83,6 +83,7 @@ class ReplayEngine:
             mode="backtest",
             strategy=self.strategy.name,
             protective_stop=self.strategy.uses_protective_stop,
+            strategy_obj=self.strategy,  # sizing (qty_for) and stop (stops) hooks
         )
         agg = BarAggregator()
         engine = TradingEngine(self.s, self.strategy, book, orders, agg, None, self.run_id)

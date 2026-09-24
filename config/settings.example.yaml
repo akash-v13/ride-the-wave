@@ -78,11 +78,21 @@ strategies:                    # accounting key `id`; `mode: shadow` = simulated
       entry: {entry_start: "09:30", entry_end: "11:30", green_streak_minutes: 3, min_streak_gain_pct: 1.0,
               filters: {min_spy_ret_session_pct: 0.1, max_session_ret_pct: 0.6, max_trade_count_ratio: null}}
       exit: {trail_pct: 1.0, min_gain_pct: 0.5, hard_stop_pct: 2.0, max_hold_minutes: 180}
-  - id: orb                      # OBSERVATION ONLY: long-only opening-range breakout, backtest PF 0.93 on the top-50 universe.
-    kind: orb
+  - id: orb                      # OBSERVATION ONLY: long-only opening-range breakout. Backtest PF 0.91 at 0.25 ATR (0.74 at 0.1 ATR)
+    kind: orb                    # once the stop hook reached the broker (2026-09-23); the earlier 0.93 used the global 1% stop.
     mode: shadow
     weight: 0.5
-    params: {range_minutes: 15, rvol_min: 3.0, stop_atr: 0.1, risk_pct: 1.0, exit_time: "15:55"}
+    params: {range_minutes: 15, rvol_min: 3.0, stop_atr: 0.25, risk_pct: 1.0, exit_time: "15:55"}
+  - id: xs_overnight             # OBSERVATION ONLY: Kakushadze & Serur open-to-close alpha, long leg (feature 19). No ranking power in
+    kind: xs_daytrade            # the diagnostic; best backtest row PF 0.91 on 208 trades. docs/research/2026-09-23-kakushadze-151-feasibility.md
+    mode: shadow
+    weight: 0.5
+    params: {signal: overnight_reversal, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
+  - id: xs_combo                 # OBSERVATION ONLY: the two Appendix-A alphas combined (overnight reversal + previous-day momentum), PF 0.84.
+    kind: xs_daytrade
+    mode: shadow
+    weight: 0.5
+    params: {signal: combo, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
 
 risk:                          # kill switches, see docs/features/14-operator.md
   max_daily_loss_pct: 2.0      # realised loss as % of allocation -> flatten and halt entries (0 disables)

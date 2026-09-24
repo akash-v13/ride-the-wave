@@ -203,7 +203,19 @@ The Wave Rider trigger counted on 15-minute bars shows what the 1-minute version
 \text{in play: } V_{\text{range}} \ge 3\,\bar V_{14}\,\tfrac{15}{390}, \qquad \text{entry: } c_t > H_{\text{range}}, \qquad \text{stop} = \text{entry} - 0.1\,\mathrm{ATR}_{14}, \qquad q = \frac{0.01\,A}{\text{entry} - \text{stop}}
 ```
 
-**Example.** Fourteen-day average volume 20 million shares, so 15 normal minutes are 770,000; the first 15 minutes trade 2.8 million (3.6x) with a high of 50.60 and ATR 1.50. A close at 50.65 buys; stop 50.50; on a $5,000 allocation the 1% risk is $50, so 333 shares, capped by the slot to 98. **Evidence:** best profit factor 0.93 on 253 trades on the top-50 universe; the 59 trades that reached the close averaged +2.2%, the other 194 were stopped out. The published edge draws on the whole market and the short side; both are open items. Runs in shadow as observation only.
+**Example.** Fourteen-day average volume 20 million shares, so 15 normal minutes are 770,000; the first 15 minutes trade 2.8 million (3.6x) with a high of 50.60 and ATR 1.50. A close at 50.65 buys; stop 50.50; on a $5,000 allocation the 1% risk is $50, so 333 shares, capped by the slot to 98. **Evidence:** the 22 September figure (profit factor 0.93 on 253 trades) was computed with the global 1% stop, because the strategy's stop hook never reached the broker; with the intended ATR stop the profit factor is 0.74 at 0.1 ATR and 0.91 at 0.25 ATR (230 trades, 33% win, the 100 trades that reached the close averaged +1.7%). The shadow slot uses 0.25 ATR from 24 September. The published edge draws on the whole market and the short side; both are open items. Runs in shadow as observation only.
+
+### 4.9 Cross-sectional day trades from *151 Trading Strategies* (shadow)
+
+**Idea** (Kakushadze and Serur 2018, sections 3.9 and 3.20 and Appendix A). Rank the whole universe against itself once a day and buy the top of the ranking from the open to the close. Three scores, each a log return with the universe average removed so a market-wide gap cancels: overnight reversal (buy the names that fell most overnight relative to peers), previous-day momentum (buy yesterday's relative intraday winners) and intraday reversal (at a later entry, buy the laggards since the open); a combo adds the first two. Long-only, company stocks only (funds and leveraged products excluded), equal dollars or dollars in proportion to 1/σ, an optional hard stop, sold at 15:55.
+
+```latex
+s_i = -\left(r^{on}_i - \frac{1}{N}\sum_{j=1}^{N} r^{on}_j\right), \qquad r^{on}_i = \ln\frac{O_i^{\,today}}{C_i^{\,yesterday}}
+```
+
+**Example.** 48 stocks scored at 09:31, average overnight move −0.4%. A stock that opened −2.9% scores +2.5%, rank 1 of 48; with a 1.5% threshold and five slots it is bought at the ask plus 0.1% and sold at 15:55.
+
+**Evidence** (June to September 2026, top-50 universe, 3,746 stock-days): no score ranks stocks usefully. Daily rank correlations with the open-to-close return have t-statistics of −0.4, −0.9 and +0.3, and the buy quintile is the worst one for two of the three. Every one of the 30-plus backtest combinations loses (profit factors 0.52 to 0.91); a 3% stop fires on a third of trades while trades that reach the close win 66% of the time at +1.2%. Liquid stocks drifted −16 bp a day between the open and the close in the sample, which a long-only leg cannot escape; the book's version is dollar-neutral, so short selling is what makes it testable as written. Two variants (overnight reversal and combo, no stop, 3% gap cap, 1.5% threshold) run in shadow from 24 September as observation only; not a candidate for allocation. Feature 19; the map of all 151 strategies against our Alpaca provisions is docs/research/2026-09-23-kakushadze-151-feasibility.md.
 
 ## 5. Research protocol: how a strategy earns its place
 
@@ -371,6 +383,7 @@ Six experiments have been run since 17 September 2026. One configuration is thin
 | 21 Sep | First live paper session | 15:18 to 16:00 ET | Universe 61, warm-up, 169 ticks, ledger written, zero errors, no trades (window closed, market down) | Plumbing works; a full day from the open is next |
 | 21 Sep | News scores via Jev as an entry signal | 11,735 headlines, 21,081 headline-symbol pairs, Jun to Sep 2026, $0.85 of API calls | Fresh positive news: +0.6 bp at 180 min, −7 bp to close, 2% already priced; streak entries with fresh positive news profit factor 0.74 vs 0.88. Negative news −16 bp and legal news −51 bp at 180 min, both halves | No news confirmer; exclusion low priority; keep scoring daily headlines for the analyst and post-earnings pockets |
 | 22 Sep | 15-minute Wave Rider and long-only opening-range breakout in the engine | Same 75 days, top-50 universe; 6 + 8 configurations | 15-minute: PF 0.89 without filters, 1.00 with the market gate (122 trades). Breakout: best PF 0.93 (253 trades, 22% win, close-reaching winners +2.2%) | Neither passes; both run in shadow as observation only from 23 Sep |
+| 23 Sep | 151 Trading Strategies mapped; its open-to-close alphas built long-only (overnight reversal, previous-day momentum, intraday reversal, combo) | Same 75 days, top-50 company stocks; 3,746 stock-days; 37 configurations | Rank-IC t-statistics −0.4, −0.9, +0.3; buy quintile worst for two of three; every configuration loses (PF 0.52 to 0.91). ORB corrected to PF 0.74 at 0.1 ATR and 0.91 at 0.25 ATR once its stop hook reached the broker | Two variants in shadow as observation only; short selling is the unlock for the book's stock strategies |
 
 ### The base strategy's exits, from the base run
 
@@ -493,6 +506,7 @@ Ride The Wave stays live as the reference strategy and the live-feed data collec
 - Gao, Han, Li and Zhou, "Market Intraday Momentum", *Journal of Financial Economics* 2018. Tested and found absent in 2016 to 2026 (Chapter 8).
 - Zarattini, Aziz and Barbon, "A Profitable Day Trading Strategy for the U.S. Equity Market", 2024. Opening-range breakout on stocks in play.
 - Gatev, Goetzmann and Rouwenhorst, "Pairs Trading: Performance of a Relative-Value Arbitrage Rule", *Review of Financial Studies* 2006.
+- Kakushadze and Serur, *151 Trading Strategies*, SSRN 3247865, 2018 (also Palgrave Macmillan). A catalogue across every asset class; the stock chapter and Appendix A are the source of Chapter 4.9.
 - Jegadeesh, "Evidence of Predictable Behavior of Security Returns", *Journal of Finance* 1990; Jegadeesh and Titman, "Returns to Buying Winners and Selling Losers", *Journal of Finance* 1993.
 - Moreira and Muir, "Volatility-Managed Portfolios", *Journal of Finance* 2017.
 - Alpaca market data and trading API documentation, verified 17 and 21 September 2026; TypeSafe AI Jev documentation, verified 17 September 2026.

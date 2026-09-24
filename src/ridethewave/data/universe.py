@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from alpaca.data.enums import DataFeed, MarketType, MostActivesBy
 from alpaca.data.requests import MarketMoversRequest, MostActivesRequest, StockSnapshotRequest
 from alpaca.trading.enums import AssetClass, AssetStatus
@@ -10,6 +12,21 @@ from loguru import logger
 
 from ridethewave.clients import AlpacaClients
 from ridethewave.config import UniverseSettings
+
+# Asset names that mark ETFs, ETNs, leveraged products and commodity/crypto trusts. Cross-sectional stock
+# strategies rank company stocks against each other; a 3x semiconductor ETF or a bitcoin trust in that
+# ranking is noise. Matched case-insensitively on whole words.
+FUND_PATTERN = re.compile(
+    r"\b(etf|etn|ishares|spdr|proshares|direxion|invesco|vaneck|vanguard|schwab|wisdomtree|global x|"
+    r"graniteshares|yieldmax|grayscale|fund|index|2x|3x|leveraged|bitcoin trust|ether trust|ethereum trust|"
+    r"gold trust|silver trust|trust, series|united states oil|united states natural gas)\b",
+    re.IGNORECASE,
+)
+
+
+def is_fund(name: str | None) -> bool:
+    """True when an Alpaca asset name looks like a fund, ETF/ETN, leveraged product or commodity/crypto trust."""
+    return bool(name) and FUND_PATTERN.search(name) is not None
 
 
 class UniverseBuilder:
@@ -42,6 +59,12 @@ class UniverseBuilder:
             self._assets = {a.symbol: a for a in assets}
             logger.debug("loaded {} active US equity assets", len(self._assets))
         return self._assets
+
+    def fund_symbols(self, symbols: list[str] | None = None) -> set[str]:
+        """Symbols (of the given list, or all assets) whose asset name marks them as a fund."""
+        assets = self._load_assets()
+        pool = symbols if symbols is not None else list(assets)
+        return {s for s in pool if s in assets and is_fund(getattr(assets[s], "name", None))}
 
     def filter_tradable(self, symbols: list[str]) -> list[str]:
         assets = self._load_assets()

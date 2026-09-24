@@ -188,9 +188,13 @@ def main() -> int:
         pit.preload(args.start, args.end)
         cache: dict[date, list[str]] = {}
 
-        def universe_fn(d, _pit=pit, _n=args.pit_top, _c=cache):
+        from ridethewave.strategy import build as _build
+
+        stocks_only = _build(args.strategy, base, base_params).stocks_only
+
+        def universe_fn(d, _pit=pit, _n=args.pit_top, _c=cache, _so=stocks_only):
             if d not in _c:
-                _c[d] = _pit.universe_for(d, _n)
+                _c[d] = _pit.universe_for(d, _n, exclude_funds=_so)
             return _c[d]
     elif args.symbols:
         universe = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]

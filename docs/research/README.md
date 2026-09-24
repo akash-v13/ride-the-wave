@@ -11,3 +11,4 @@ Write-ups of experiments run with the backtester: what was tested, on which data
 - 2026-09-21-spy-intraday-momentum.md: the published first-to-last half-hour effect is absent (slightly reversed) in 2016-2026; strategy rejected.
 - 2026-09-21-news-jev-validation.md: Jev scores 21k headline-symbol pairs; positive news has no intraday edge and hurts streak entries; negative/legal news drifts lower; no filter built, keep collecting.
 - 2026-09-22-fifteen-minute-and-orb-backtests.md: 15-minute Wave Rider (PF 0.89 / 1.00 with the market gate) and long-only ORB (PF 0.93); both to shadow as observation only.
+- 2026-09-23-kakushadze-151-feasibility.md: the 151-strategy catalogue against our Alpaca provisions; the open-to-close alphas (feature 19) have no ranking power in Jun-Sep 2026 and all 37 backtest combinations lose; shadow only; short selling is the unlock.

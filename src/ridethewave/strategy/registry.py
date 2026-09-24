@@ -29,10 +29,17 @@ def _orb(settings: Settings, params: dict) -> Strategy:
     return OpeningRangeBreakout(params)
 
 
+def _xs_daytrade(settings: Settings, params: dict) -> Strategy:
+    from ridethewave.strategy.xs_daytrade import CrossSectionalDaytrade
+
+    return CrossSectionalDaytrade(params)
+
+
 REGISTRY: dict[str, Callable[[Settings, dict], Strategy]] = {
     "wave_rider": _wave_rider,
     "spy_intraday": _spy_intraday,
     "orb": _orb,
+    "xs_daytrade": _xs_daytrade,
 }
 
 

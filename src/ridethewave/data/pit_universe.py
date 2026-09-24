@@ -18,6 +18,7 @@ from loguru import logger
 from ridethewave.clients import AlpacaClients
 from ridethewave.config import UniverseSettings
 from ridethewave.data.market_data import DailyBars
+from ridethewave.data.universe import is_fund
 from ridethewave.storage import Database
 
 
@@ -28,6 +29,7 @@ class PointInTimeUniverse:
         self.lookback = lookback
         self.daily = DailyBars(clients.data, db)
         self._pool: list[str] | None = None
+        self._funds: set[str] = set()
         self._frame: pd.DataFrame | None = None
         self._loaded: tuple[date, date] | None = None
 
@@ -46,6 +48,7 @@ class PointInTimeUniverse:
                 and str(getattr(a.exchange, "value", a.exchange)).upper() in allowed
                 and a.symbol.isalpha()  # skip warrants/units/preferreds with . or / in the symbol
             )
+            self._funds = {a.symbol for a in assets if is_fund(getattr(a, "name", None))}
             logger.info("point-in-time pool: {} symbols", len(self._pool))
         return self._pool
 
@@ -65,7 +68,12 @@ class PointInTimeUniverse:
             self.daily.calls,
         )
 
-    def universe_for(self, day: date, top: int | None = None) -> list[str]:
+    def fund_symbols(self) -> set[str]:
+        self.pool()
+        return set(self._funds)
+
+    def universe_for(self, day: date, top: int | None = None, exclude_funds: bool = False) -> list[str]:
+        """Top ``top`` names by trailing dollar volume; with ``exclude_funds`` the top ``top`` company stocks."""
         top = top or self.cfg.top
         if self._frame is None or self._loaded is None or not (self._loaded[0] <= day <= self._loaded[1]):
             self.preload(day, day)
@@ -88,5 +96,8 @@ class PointInTimeUniverse:
             & (stats["last_close"] >= self.cfg.min_price)
             & (stats["last_close"] <= self.cfg.max_price)
         ]
+        if exclude_funds:
+            funds = self.fund_symbols()
+            stats = stats[~stats.index.isin(funds)]
         chosen = stats.sort_values("avg_dv", ascending=False).head(top).index.tolist()
         return chosen

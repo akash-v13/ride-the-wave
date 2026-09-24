@@ -30,9 +30,10 @@ The owner's full brief is in [outline.md](outline.md). The owner is comfortable 
 | 16. 15-minute Wave Rider variant | Proposed | Aggregator `bar_minutes`, exits re-swept at 3h horizon, IEX check first |
 | 18. Multi-strategy core: slots, shadow mode, allocator, registry | Done 2026-09-21 | docs/features/15-multi-strategy.md; DB migrated; scheduled bot restarted on it |
 | 19. SPY intraday momentum study | Done 2026-09-21, rejected | docs/research/2026-09-21-spy-intraday-momentum.md |
-| 20. Opening-range breakout (long-only) and 15-minute Wave Rider | Built 2026-09-22; both in shadow as observation only | Backtests: ORB PF 0.93, WR-15m PF 1.00 with the market gate. `bar_minutes` resampling and `on_session_start` daily context added. docs/research/2026-09-22-fifteen-minute-and-orb-backtests.md |
+| 20. Opening-range breakout (long-only) and 15-minute Wave Rider | Built 2026-09-22; both in shadow as observation only | Backtests: WR-15m PF 1.00 with the market gate; ORB 0.93 was measured with the global 1% stop (hook unwired), corrected 2026-09-23 to 0.74 at 0.1 ATR and 0.91 at 0.25 ATR, shadow now 0.25 ATR. `bar_minutes` resampling and `on_session_start` daily context added. docs/research/2026-09-22-fifteen-minute-and-orb-backtests.md |
+| 23. *151 Trading Strategies* (Kakushadze & Serur) mapped; cross-sectional day-trade family | Done 2026-09-23 | Feasibility map: docs/research/2026-09-23-kakushadze-151-feasibility.md. `xs_daytrade` (feature 19: overnight reversal, previous-day momentum, intraday reversal, combo; long-only, stocks only): no ranking power (rank-IC t −0.4 / −0.9 / +0.3), every backtest combination loses (PF 0.52 to 0.91). `xs_overnight` and `xs_combo` in shadow from 2026-09-24 as observation only. Side fixes: strategy sizing/stop hooks wired in runner and backtester; `run_backtest.py` supplies daily bars; per-strategy `stocks_only` universe |
 | 22. TypeScript API + web UI | Done 2026-09-23 | `web/`: Fastify on Node 26, reads SQLite, control requests queued for the bot; launchd agent `com.ridethewave.api`, http://127.0.0.1:8787. 3 vitest + 70 pytest pass. Pause/resume/flatten take effect from the first bot start after 2026-09-23. docs/features/18-typescript-api.md |
-| 21. Next engine experiments | Planned | ORB on a broader universe with a catalyst flag; 15-minute exits without gap-cost stops; short side needs short selling |
+| 21. Next engine experiments | Planned | **Short selling in the execution layer first** (unlocks the dollar-neutral stock strategies of the Kakushadze catalogue, pairs, stat-arb); ORB on a broader universe with a catalyst flag; 15-minute exits without gap-cost stops; a daily-portfolio executor with overnight holds for monthly-rebalance strategies |
 | 17. Operator: kill switches, check-in reports, alerts, launchd schedule | Done 2026-09-21 | docs/features/14-operator.md. Installed with `scripts/install_launchd.py install` |
 | 14. Live feature recording | Done 2026-09-21 | Every paper day writes labelled IEX feature rows. docs/features/13-live-feature-recording.md. Active from the next bot start |
 | 11. News / sentiment filter via Jev | Validated 2026-09-21: not built | 21k pairs scored ($0.85). Positive news: no intraday edge, negative for streak entries. Down/legal news drifts lower. Decision: no confirmer; exclusion low priority; keep scoring daily headlines for the analyst and post-earnings pockets. docs/research/2026-09-21-news-jev-validation.md |
@@ -62,7 +63,7 @@ README.md               how to install and run
 pyproject.toml          package + dependencies (uv)
 .env.example            template for secrets
 config/                 strategy settings (YAML)
-docs/                   architecture, strategy, API docs, requirements, per-feature docs
+docs/                   architecture, strategy, API docs, requirements, per-feature docs; progress.md is the owner's log
 src/ridethewave/        the Python package
   data/                 universe selection, market data fetching, bar aggregation
   strategy/             entry/exit logic (pure, no I/O)
@@ -111,7 +112,7 @@ update the handbook chapter as well as the feature or research page.
 
 ## Working rules for Claude
 
-1. Update the status table above and `docs/decisions.md` whenever a phase or a decision changes.
+1. Update the status table above, `docs/decisions.md` and the owner's log `docs/progress.md` whenever a phase or a decision changes.
 2. Every new feature gets a plain-English page in `docs/features/` before the phase is marked done.
 3. Every new folder gets a README.md.
 4. Never print or commit API keys. Never point the bot at `api.alpaca.markets` (live).
@@ -153,7 +154,8 @@ docs/strategy.md.
 
 `docs/books/` (PDFs gitignored; README lists them): Tsay *Analysis of Financial Time Series* 2nd ed.,
 Dixon/Halperin/Bilokon *Machine Learning in Finance* (distilled into a skill 2026-09-17), Rao/Jelvis
-*Foundations of RL with Applications in Finance*. `brew install poppler` enables PDF page rendering;
+*Foundations of RL with Applications in Finance*, Kakushadze/Serur *151 Trading Strategies* (mapped against
+Alpaca 2026-09-23; owner used some of these with good profit factors elsewhere, which ones is still to ask). `brew install poppler` enables PDF page rendering;
 `pdftotext -layout` extracts text. Companion code for Dixon: github.com/mfrdixon/ML_Finance_Codes.
 
 ## Data facts (measured 2026-09-17)

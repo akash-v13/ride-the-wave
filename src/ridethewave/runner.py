@@ -182,7 +182,7 @@ class BotRunner:
                 ):
                     self._rebuild_universe()
                     for sl in self.slots:
-                        sl.symbols = sl.strategy.symbols(self.universe)
+                        sl.symbols = self._symbols_for(sl.strategy)
                     last_universe_refresh = time.monotonic()
             except Exception as e:  # noqa: BLE001
                 logger.exception("tick failed: {}", e)
@@ -244,6 +244,7 @@ class BotRunner:
                 ask_lookup=self._ask,
                 strategy=spec.id,
                 protective_stop=strategy.uses_protective_stop,
+                strategy_obj=strategy,  # sizing (qty_for) and stop (stops) hooks
             )
             engine = TradingEngine(self.s, strategy, book, orders, self.agg, self.db, LIVE_RUN_ID)
             if spec.mode == "live":
@@ -257,11 +258,23 @@ class BotRunner:
                     allocator,
                     orders,
                     engine,
-                    strategy.symbols(self.universe),
+                    self._symbols_for(strategy),
                     allocation,
                     base_share,
                 )
             )
+
+    def _symbols_for(self, strategy) -> list[str]:
+        """The strategy's own view of the universe; strategies with ``stocks_only`` do not see funds."""
+        syms = strategy.symbols(self.universe)
+        if getattr(strategy, "stocks_only", False):
+            try:
+                funds = self.universe_builder.fund_symbols(syms)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("fund lookup failed, keeping funds in the universe: {}", e)
+                funds = set()
+            syms = [x for x in syms if x not in funds]
+        return syms
 
     def _exclusive(self, my_id: str):
         """A symbol held or pending in another live slot is off limits for a BUY."""

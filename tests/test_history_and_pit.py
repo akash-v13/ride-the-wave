@@ -64,3 +64,31 @@ def test_pit_universe_ranks_by_trailing_dollar_volume():
     # universe for 9/16 must only use sessions before 9/16 and rank BIG (100M) above MID (25M)
     assert pit.universe_for(date(2026, 9, 16), top=5) == ["BIG", "MID"]
     assert pit.universe_for(date(2026, 9, 16), top=1) == ["BIG"]
+
+
+def test_fund_detection_and_stocks_only_universe():
+    from ridethewave.data.universe import is_fund
+
+    assert is_fund("Direxion Daily Semiconductor Bull 3X Shares")
+    assert (
+        is_fund("iShares Bitcoin Trust ETF")
+        and is_fund("SPDR S&P 500 ETF Trust")
+        and is_fund("Invesco QQQ Trust, Series 1")
+    )
+    assert (
+        not is_fund("MicroStrategy Inc") and not is_fund("Northern Trust Corp") and not is_fund("Ultra Clean Holdings")
+    )
+    pit = PointInTimeUniverse.__new__(PointInTimeUniverse)
+    pit.cfg = UniverseSettings(min_price=5, max_price=500)
+    pit.lookback = 3
+    days = [date(2026, 9, 10), date(2026, 9, 11), date(2026, 9, 14), date(2026, 9, 15), date(2026, 9, 16)]
+    rows = []
+    for d in days:
+        rows += [("SOXL", d, 30.0, 50_000_000), ("AAPL", d, 200.0, 5_000_000), ("MSFT", d, 400.0, 1_000_000)]
+    pit._frame = pd.DataFrame(rows, columns=["symbol", "day", "close", "volume"])
+    pit._frame["dollar_volume"] = pit._frame["close"] * pit._frame["volume"]
+    pit._loaded = (days[0], days[-1])
+    pit._pool = ["AAPL", "MSFT", "SOXL"]
+    pit._funds = {"SOXL"}
+    assert pit.universe_for(date(2026, 9, 16), top=2) == ["SOXL", "AAPL"]
+    assert pit.universe_for(date(2026, 9, 16), top=2, exclude_funds=True) == ["AAPL", "MSFT"]
