@@ -232,6 +232,26 @@ project with t above 2, on 231 days. Nothing changes for the short side: shortin
 rankings loses heavily in bull trends. Momentum long-only, optionally leaning harder into chop, is now
 the leading daily candidate; the `pm_megacaps` shadow slot should move to the point-in-time universe.
 
+## 5e. Shorts on their own and as a hedge (asked by the owner, 2026-09-24)
+
+Same survivorship-free monthly top 100, 2017-01-01 to 2026-09-22, next-open fills, 5 bp a side, no
+borrow cost modelled (add roughly 0.3 to 1% a year for easy-to-borrow names, more for hard-to-borrow).
+
+| Portfolio | CAGR | Vol | Sharpe | Max DD | Halves |
+| --- | --- | --- | --- | --- | --- |
+| Momentum long-only (reference) | +23.9% | 31.8% | 0.83 | −36.6% | +26.1% / +21.2% |
+| Short leg only: short the bottom 30% by momentum | −16.6% | 25.1% | −0.60 | −83.1% | −20.9% / −11.9% |
+| Short SPY 100% (reference) | −15.9% | 17.8% | −0.88 | −81.4% | −18.0% / −13.7% |
+| Momentum long 100% + short SPY 50% | +16.4% | 26.0% | 0.71 | −34.2% | +16.8% / +15.5% |
+| Momentum long 100% + short SPY 100% (market-neutral) | +8.7% | 22.2% | 0.49 | −36.7% | +7.7% / +9.2% |
+
+The momentum short leg did no better than shorting the index: the "losers" were not worse than the
+market, they were the market with more noise. Hedging the long momentum book with the index keeps
+its excess (about 8.7% a year, both halves) but at a Sharpe of 0.49, because the residual is
+volatile; the hedge halves the return without halving the risk. Shorting stocks as an alpha source
+is not supported by anything measured here; short-volatility positions with defined risk (the put
+spreads of 2026-09-24-options-backtest.md) are the only short exposure that has paid.
+
 ## 6. What was ported, and what comes next
 
 Ported today: the 13 price-only daily strategies, the backtester with honest benchmarks, the
