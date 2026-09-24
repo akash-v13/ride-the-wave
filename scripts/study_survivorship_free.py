@@ -1,0 +1,157 @@
+"""The 'if we had started then' test on a survivorship-free universe.
+
+Reads the parquet panel written by scripts/download_universe_history.py (active AND delisted stocks),
+builds a point-in-time universe each month (top N by trailing 20-day dollar volume, using only prior
+data), and replays the daily strategies from --start with SPY as the benchmark. Nothing in the run
+uses information that was not available on the day.
+
+    uv run python scripts/study_survivorship_free.py --start 2017-01-01 --end 2026-09-22 --top 100
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+from loguru import logger
+
+from ridethewave.config import load_settings
+from ridethewave.daily import build_daily, run_daily
+from ridethewave.daily.data import Panel, load_panel
+from ridethewave.daily.engine import format_report
+from ridethewave.storage import Database
+
+PANEL = Path("data/daily_panel")
+
+RUNS = [
+    ("price_momentum", {}),
+    ("price_momentum", {"allow_short": True}),
+    ("residual_momentum", {}),
+    ("residual_momentum", {"allow_short": True}),
+    ("alpha_combo", {}),
+    ("mean_reversion", {}),
+    ("mean_reversion", {"allow_short": True}),
+    ("mean_reversion_weighted", {}),
+    ("low_volatility", {}),
+    ("multifactor", {}),
+]
+
+
+def load_long(min_price: float, min_dollar_volume: float) -> pd.DataFrame:
+    frames = []
+    for f in sorted(PANEL.glob("bars_*.parquet")):
+        df = pd.read_parquet(f)
+        stats = df.groupby("symbol").agg(px=("close", "median"), dv=("volume", "median"), n=("close", "size"))
+        stats["dv"] = stats["dv"] * stats["px"]
+        keep = stats[(stats["px"] >= min_price) & (stats["dv"] >= min_dollar_volume) & (stats["n"] >= 120)].index
+        frames.append(df[df["symbol"].isin(keep)])
+    long = pd.concat(frames, ignore_index=True)
+    long["day"] = pd.to_datetime(long["day"])
+    return long
+
+
+def monthly_universes(long: pd.DataFrame, top: int, lookback: int = 20, min_price: float = 5.0) -> dict[str, list[str]]:
+    """{'YYYY-MM': symbols} ranked by trailing dollar volume as of the last session before the month."""
+    dv = long.pivot(index="day", columns="symbol", values="close") * long.pivot(
+        index="day", columns="symbol", values="volume"
+    )
+    px = long.pivot(index="day", columns="symbol", values="close")
+    adv = dv.rolling(lookback, min_periods=10).mean()
+    out: dict[str, list[str]] = {}
+    months = sorted({d.strftime("%Y-%m") for d in adv.index})
+    for m in months:
+        first = pd.Timestamp(m + "-01")
+        prior = adv.index[adv.index < first]
+        if len(prior) < lookback:
+            continue
+        d = prior[-1]
+        row = adv.loc[d].dropna()
+        row = row[px.loc[d, row.index] >= min_price]
+        out[m] = row.sort_values(ascending=False).head(top).index.tolist()
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--start", type=date.fromisoformat, default=date(2017, 1, 1))
+    ap.add_argument("--end", type=date.fromisoformat, default=date(2026, 9, 22))
+    ap.add_argument("--top", type=int, default=100)
+    ap.add_argument("--min-price", type=float, default=5.0)
+    ap.add_argument("--min-dollar-volume", type=float, default=2e6)
+    ap.add_argument("--out", default="data/research/daily/survivorship-free")
+    args = ap.parse_args()
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
+
+    long = load_long(args.min_price, args.min_dollar_volume)
+    logger.info("panel: {} rows, {} symbols after liquidity filters", len(long), long["symbol"].nunique())
+    universes = monthly_universes(long, args.top)
+    chosen = sorted({s for lst in universes.values() for s in lst})
+    delisted = pd.read_parquet(PANEL / "assets.parquet").set_index("symbol")["status"]
+    n_dead = sum(1 for s in chosen if delisted.get(s) == "inactive")
+    logger.info(
+        "{} months of universes; {} distinct names ever selected, {} of them since delisted",
+        len(universes),
+        len(chosen),
+        n_dead,
+    )
+
+    sub = long[long["symbol"].isin(chosen)]
+    wide = {
+        c: sub.pivot(index="day", columns="symbol", values=c).sort_index()
+        for c in ("open", "high", "low", "close", "volume")
+    }
+    settings = load_settings()
+    db = Database(settings.storage.resolved_db_path())
+    spy = load_panel(db, ["SPY"], date(2015, 6, 1), args.end)  # SPY is a fund: it lives in the SQLite cache
+    for c in wide:
+        wide[c] = wide[c].join(getattr(spy, c)[["SPY"]], how="left")
+    panel = Panel(**wide)
+
+    def universe_fn(day: date) -> list[str]:
+        return universes.get(day.strftime("%Y-%m"), [])
+
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    with open(args.out + ".log", "w") as log:
+        log.write(
+            f"survivorship-free point-in-time top {args.top}; {len(chosen)} names ever selected, {n_dead} delisted\n"
+        )
+        for kind, params in RUNS:
+            strat = build_daily(kind, params)
+            res = run_daily(strat, panel, args.start, args.end, universe_fn=universe_fn, capital=100_000)
+            m = res.metrics
+            rows.append(
+                {
+                    "strategy": kind,
+                    "params": json.dumps(params),
+                    **{k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
+                }
+            )
+            log.write(f"##### {kind} {params}\n{format_report(res, last_trades=0)}\n\n")
+            log.flush()
+            logger.info(
+                "{} {}: CAGR {:+.1%} Sharpe {:.2f} DD {:+.1%} | SPY {:+.1%} IR {:+.2f} (t {:+.1f}) | EW {:+.1%} IR {:+.2f} (t {:+.1f})",
+                kind,
+                params,
+                m["cagr"],
+                m["sharpe"],
+                m["max_dd"],
+                m["benchmark_cagr"],
+                m["ir_vs_benchmark"],
+                m["ir_t_vs_benchmark"],
+                m["equal_weight_cagr"],
+                m["ir_vs_equal_weight"],
+                m["ir_t_vs_equal_weight"],
+            )
+    pd.DataFrame(rows).to_csv(args.out + ".csv", index=False)
+    db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

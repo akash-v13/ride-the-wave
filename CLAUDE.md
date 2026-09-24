@@ -111,6 +111,15 @@ typesafe-sdk 0.6.0 installed under the `jev` dependency group) and the plan for 
 sentiment universe filter. Owner is on the early-access waitlist; no key yet. Load the skill whenever
 Jev, TypeSafe, headline scoring, or a news filter comes up.
 
+## Strategy intake and Alpaca capabilities
+
+The owner hands strategies over as briefs in `docs/strategies/inbox/` (format: `docs/strategy-intake.md`);
+every brief goes through the pipeline there and gets a verdict page under `docs/strategies/`. What the
+Alpaca account and data plan enable, what is used and what is not: `docs/alpaca-capabilities.md`
+(probed 2026-09-23: shorting, margin 4x, fractional, crypto, options level 3, extended hours, tick data,
+corporate actions, websocket streams are all available; only stocks/ETFs long, snapshots, bars, news,
+screener and options chains are used).
+
 ## Handbook
 
 `docs/handbook.md` is the owner's all-in-one reference and the version to share; it is exported from the

@@ -14,6 +14,17 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-09-23 (late) — Capability map and strategy intake
+
+- `docs/alpaca-capabilities.md`: everything the account and data plan enable versus what the bot uses.
+  Unused and available: short selling, extended hours, fractional and dollar orders, crypto (73 pairs),
+  websocket streams, tick history, corporate actions, bracket and trailing-stop orders, option history
+  since February 2024.
+- `docs/strategy-intake.md`: the brief template and the seven-stage pipeline every idea goes through;
+  briefs go in `docs/strategies/inbox/`.
+- Survivorship-free daily history (7,786 active and delisted stocks since 2016) downloaded to
+  `data/daily_panel/`; the "started in 2017" replay of the daily strategies runs on it.
+
 ## 2026-09-23 (night) — Options engine ported and wired to Alpaca's options API
 
 **Completed**
