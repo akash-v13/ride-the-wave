@@ -39,7 +39,8 @@ def cmd_universe(args) -> int:
     from ridethewave.daily.panel_store import load_long, monthly_universes
 
     long = load_long(5.0, 2e6)
-    u = monthly_universes(long, args.top)
+    u = monthly_universes(long, args.rank_hi)
+    u = {m: v[args.rank_lo - 1 :] for m, v in u.items()}  # a band of the dollar-volume ranking
     u = {m: v for m, v in u.items() if START.strftime("%Y-%m") <= m <= END.strftime("%Y-%m")}
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "universes.json").write_text(json.dumps(u))
@@ -119,6 +120,10 @@ def cmd_pairs(args) -> int:
         if not len(df):
             continue
         df = df[df["n_symbols"] <= args.max_symbols]
+        if args.keywords:
+            pat = "|".join(k.strip().lower() for k in args.keywords.split(",") if k.strip())
+            text = (df["headline"].fillna("") + " " + df["summary"].fillna("")).str.lower()
+            df = df[text.str.contains(pat, regex=True)]
         for r in df.itertuples():
             m = r.created_at.strftime("%Y-%m")
             for s in r.symbols:
@@ -541,11 +546,104 @@ def _engine_tests(feats: pd.DataFrame, long: pd.DataFrame) -> list[str]:
     return out
 
 
+# ------------------------------------------------------------------ post-earnings drift
+def cmd_pead(args) -> int:
+    """Post-earnings-announcement drift: after a Jev-identified earnings release, does the stock keep moving
+    in the direction of its announcement-day reaction? Excess over the universe band, from the next open."""
+    import numpy as np
+
+    sc = pd.read_parquet(OUT / "scores.parquet")
+    sc = sc[sc["error"].isna() & (sc["event"] == "earnings_release") & (sc["p_relevant"] > 0.5) & (sc["p_stale"] < 0.5)]
+    pairs = pd.read_parquet(OUT / "pairs.parquet").set_index("key")
+    sc = sc.join(pairs[["created_at"]], on="key")
+    days = _trading_days()
+    et = sc["created_at"].dt.tz_convert(ET_TZ)
+    local = pd.to_datetime(et.dt.date)
+    after = (et.dt.hour >= 16).to_numpy()
+    idx = days.searchsorted(local.to_numpy(), side="left")
+    idx = idx + ((days[idx.clip(max=len(days) - 1)] == local.to_numpy()) & after)
+    sc = sc[idx < len(days)].copy()
+    sc["day"] = days[idx[idx < len(days)]]  # the reaction day: the first session that can trade on the release
+    ev = (
+        sc.sort_values("day")
+        .groupby(["symbol", "day"])
+        .agg(p_down=("p_down", "mean"), p_up=("p_up", "mean"))
+        .reset_index()
+    )
+    ev["gap"] = ev.groupby("symbol")["day"].diff().dt.days
+    ev = ev[(ev["gap"].isna()) | (ev["gap"] > 10)]  # one event per report
+    long, close, open_ = _panel()
+    nxt = open_.shift(-1)
+    r0 = close.pct_change()  # the reaction-day return
+    fwd = {h: (close.shift(-h) / nxt - 1) for h in (1, 5, 20, 40)}
+    tab = pd.concat([r0.stack().rename("r0")] + [fwd[h].stack().rename(f"f{h}") for h in fwd], axis=1)
+    tab.index.names = ["day", "symbol"]
+    tab = tab.reset_index()
+    tab = tab[_in_universe(tab)]
+    for h in fwd:
+        tab[f"x{h}"] = tab[f"f{h}"] - tab.groupby("day")[f"f{h}"].transform("mean")
+    df = ev.merge(tab, on=["day", "symbol"], how="inner").dropna(subset=["r0", "x20"])
+    half = df["day"].quantile(0.5)
+    lines = [
+        "# Post-earnings-announcement drift, from Jev-identified releases",
+        "",
+        f"{len(df):,} earnings events on {df['symbol'].nunique()} symbols, {df['day'].min().date()} to {df['day'].max().date()} "  # noqa: E501
+        f"(universe ranks {args.rank_lo} to {args.rank_hi} by dollar volume, point-in-time). Excess return over the universe "  # noqa: E501
+        "from the next open; t uses day clusters and divides by the square root of the horizon in days.",
+        "",
+        "| Reaction-day return | n | +1 d bp | +5 d bp | +20 d bp | +40 d bp | t (+20 d) | halves +20 d | share negative +20 d |",  # noqa: E501
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    edges = [(-1, -0.08), (-0.08, -0.04), (-0.04, -0.01), (-0.01, 0.01), (0.01, 0.04), (0.04, 0.08), (0.08, 9)]
+
+    def row(name, g):
+        if len(g) < 25:
+            return None
+        by_day = g.groupby("day")["x20"].mean()
+        t = by_day.mean() / by_day.std() * np.sqrt(len(by_day) / 20) if len(by_day) > 2 else float("nan")
+        h1, h2 = g[g["day"] < half]["x20"].mean() * 1e4, g[g["day"] >= half]["x20"].mean() * 1e4
+        return (
+            f"| {name} | {len(g):,} | {g['x1'].mean() * 1e4:+.0f} | {g['x5'].mean() * 1e4:+.0f} | {g['x20'].mean() * 1e4:+.0f} | "  # noqa: E501
+            f"{g['x40'].mean() * 1e4:+.0f} | {t:+.1f} | {h1:+.0f} / {h2:+.0f} | {(g['x20'] < 0).mean() * 100:.0f}% |"
+        )
+
+    for lo, hi in edges:
+        r = row(
+            f"{lo * 100:+.0f}% to {hi * 100:+.0f}%" if hi < 9 else f"> {lo * 100:+.0f}%",
+            df[(df["r0"] > lo) & (df["r0"] <= hi)],
+        )
+        if r:
+            lines.append(r)
+    lines += [
+        "",
+        "By Jev's reading of the release (independent of the price reaction):",
+        "",
+        "| Jev direction | n | +5 d bp | +20 d bp | +40 d bp | t (+20 d) | halves +20 d |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for name, g in (
+        ("down (p_down > 0.6)", df[df["p_down"] > 0.6]),
+        ("up (p_up > 0.6)", df[df["p_up"] > 0.6]),
+        ("down and reaction < -4%", df[(df["p_down"] > 0.6) & (df["r0"] < -0.04)]),
+        ("up and reaction > +4%", df[(df["p_up"] > 0.6) & (df["r0"] > 0.04)]),
+    ):
+        r = row(name, g)
+        if r:
+            lines.append("| " + " | ".join(r.split(" | ")[i] for i in (0, 1, 3, 4, 5, 6, 7)) + " |")
+    report = "\n".join(lines)
+    (OUT / "pead_report.md").write_text(report)
+    df.to_parquet(OUT / "pead_events.parquet", index=False)
+    print(report)
+    return 0
+
+
 def main() -> int:
+    global OUT
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("universe")
-    p.add_argument("--top", type=int, default=100)  # noqa: E702
+    p.add_argument("--rank-lo", type=int, default=1)
+    p.add_argument("--rank-hi", type=int, default=100)
     p = sub.add_parser("fetch")
     p.add_argument("--batch", type=int, default=25)
     p.add_argument("--force", action="store_true")  # noqa: E702
@@ -559,7 +657,12 @@ def main() -> int:
     p.add_argument("--mock", action="store_true")
     sub.add_parser("features")
     sub.add_parser("test")
+    p = sub.add_parser("pead")
+    p.add_argument("--rank-lo", type=int, default=1)
+    p.add_argument("--rank-hi", type=int, default=100)
+    ap.add_argument("--out", default=str(OUT), help="working directory for this study")
     args = ap.parse_args()
+    OUT = Path(args.out)
     logger.remove()
     logger.add(sys.stderr, level="INFO")
     return {
