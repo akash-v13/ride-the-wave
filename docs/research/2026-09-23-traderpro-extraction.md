@@ -155,6 +155,47 @@ momentum's excess flips sign between halves; every long-short version is flat or
 the "if we had started in 2017" answer the owner asked for: the book's daily stock rankings, as
 implemented in TraderPro, would not have paid for their own trading.
 
+## 5c. Does a shorter window or a regime gate change the answer? (asked by the owner)
+
+**2023-01-01 to 2026-09-22 only** (SPY 22.6% a year, equal-weight universe 25.5%, Sharpe 1.05):
+
+| Strategy | CAGR | Sharpe | Max DD | vs SPY IR (t) | vs universe IR (t) |
+| --- | --- | --- | --- | --- | --- |
+| price_momentum | 40.6% | 1.12 | −34.9% | +0.69 (1.3) | +0.59 (1.1) |
+| residual_momentum | 36.8% | 1.10 | −32.8% | +0.62 (1.2) | +0.52 (1.0) |
+| alpha_combo | 28.0% | 1.20 | −22.0% | +0.39 (0.7) | +0.19 (0.4) |
+| mean_reversion | 28.5% | 1.04 | −26.3% | +0.38 (0.7) | +0.25 (0.5) |
+| multifactor | 18.6% | 1.33 | −16.7% | −0.44 | −0.52 |
+| price_momentum long-short | 7.8% | 0.54 | −19.0% | −0.68 | −0.72 |
+| residual_momentum long-short | 5.5% | 0.46 | −16.0% | −0.87 | −0.88 |
+| mean_reversion long-short | −0.7% | 0.01 | −26.8% | −1.12 (−2.1) | −1.15 (−2.2) |
+
+In the recent window long-only momentum beat its universe by about 15 points a year, but with
+3.7 years of data the t-statistic is 1.0 to 1.1: the same size of effect as the second half of the
+full run, and no more proof. A shorter window does not make an effect more real; it makes it
+harder to distinguish from luck. The long-short versions lose in this window too.
+
+**By market regime, 2017 to 2026**, using the ported classifier on prior data only (days: bull
+trend 1,836, bear trend 251, high-volatility chop 231, low-volatility range 126, crisis 51).
+Excess return over the equal-weight universe, annualised, with t:
+
+| Strategy | bull trend | bear trend | chop, high vol | range, low vol | crisis |
+| --- | --- | --- | --- | --- | --- |
+| price_momentum | +2.9% (0.3) | +3.9% (0.2) | **+22.2% (1.0)** | −11.5% (−0.4) | −1.1% |
+| residual_momentum | −2.8% (−0.4) | −2.5% (−0.2) | **+35.4% (1.6)** | −9.3% (−0.3) | +4.2% |
+| alpha_combo | −4.1% (−0.8) | −2.5% | +2.5% | −7.4% | +8.3% |
+| multifactor | −6.2% (−1.6) | −7.9% | −13.7% | −7.6% | −16.6% |
+| price_momentum long-short | **−17.4% (−2.6)** | −11.8% | −22.6% | −20.5% | +12.4% |
+| residual_momentum long-short | **−21.3% (−3.2)** | −17.3% | −18.2% | −17.0% | +17.2% |
+
+Two readings. Momentum's whole edge over the universe sits in high-volatility chop, about 10% of
+the days, at t 1.0 to 1.6: suggestive, and consistent with the literature that momentum pays in
+dislocated markets, but not established. A gated version (momentum only when the classifier says
+chop) is a legitimate experiment; expect a small effect. The only statistically strong result in
+the table is negative: the short leg loses about 17 to 21 points a year in bull trends (t −2.6 and
+−3.2). Whatever else is built, shorting the bottom of a momentum ranking in an uptrend is the thing
+not to do.
+
 ## 6. What was ported, and what comes next
 
 Ported today: the 13 price-only daily strategies, the backtester with honest benchmarks, the

@@ -25,7 +25,9 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 - Survivorship-free daily history (7,786 active and delisted stocks since 2016) downloaded to
   `data/daily_panel/`; the "started in 2017" replay of ten daily strategies on a monthly point-in-time
   top 100 confirms the earlier verdict: none beats holding its universe (IR −1.1 to +0.2), all
-  long-short versions flat or negative (research page, section 5b).
+  long-short versions flat or negative (research page, section 5b). A 2023-26-only window and a
+  regime breakdown (section 5c) add: momentum's edge sits in high-volatility chop (t 1.0 to 1.6);
+  shorting the bottom of the ranking loses 17 to 21 points a year in bull trends (t −2.6 to −3.2).
 
 ## 2026-09-23 (night) — Options engine ported and wired to Alpaca's options API
 

@@ -83,6 +83,10 @@ def main() -> int:
     ap.add_argument("--min-price", type=float, default=5.0)
     ap.add_argument("--min-dollar-volume", type=float, default=2e6)
     ap.add_argument("--out", default="data/research/daily/survivorship-free")
+    ap.add_argument("--strategies", default=None, help="comma-separated subset of the run list")
+    ap.add_argument(
+        "--regimes", action="store_true", help="break each run's excess return over the universe down by market regime"
+    )
     args = ap.parse_args()
     logger.remove()
     logger.add(sys.stderr, level="INFO")
@@ -115,13 +119,38 @@ def main() -> int:
     def universe_fn(day: date) -> list[str]:
         return universes.get(day.strftime("%Y-%m"), [])
 
+    regimes = None
+    if args.regimes:
+        from ridethewave.daily.regime import SECTOR_ETFS_11, regime_history
+
+        ctx = load_panel(db, ["SPY", *SECTOR_ETFS_11, "HYG", "IEF"], date(2016, 1, 1), args.end)
+        regimes = regime_history(ctx.close, every=1)["regime"]
+        counts = regimes.value_counts().to_dict()
+        logger.info("regime days: {}", counts)
+
+    def regime_table(res) -> str:
+        ex = (res.equity.pct_change() - res.equal_weight.pct_change()).dropna()
+        j = ex.to_frame("ex").join(regimes.rename("regime"), how="inner")
+        lines = ["| regime | days | excess vs universe, annualised | t |", "| --- | --- | --- | --- |"]
+        for reg, g in j.groupby("regime"):
+            n = len(g)
+            if n < 20:
+                continue
+            m, sd = g["ex"].mean(), g["ex"].std()
+            t = m / sd * (n**0.5) if sd > 0 else 0.0
+            lines.append(f"| {reg} | {n} | {m * 252 * 100:+.1f}% | {t:+.1f} |")
+        return "\n".join(lines)
+
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     rows = []
     with open(args.out + ".log", "w") as log:
         log.write(
             f"survivorship-free point-in-time top {args.top}; {len(chosen)} names ever selected, {n_dead} delisted\n"
         )
+        wanted = set(args.strategies.split(",")) if args.strategies else None
         for kind, params in RUNS:
+            if wanted and kind not in wanted:
+                continue
             strat = build_daily(kind, params)
             res = run_daily(strat, panel, args.start, args.end, universe_fn=universe_fn, capital=100_000)
             m = res.metrics
@@ -132,7 +161,10 @@ def main() -> int:
                     **{k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
                 }
             )
-            log.write(f"##### {kind} {params}\n{format_report(res, last_trades=0)}\n\n")
+            log.write(f"##### {kind} {params}\n{format_report(res, last_trades=0)}\n")
+            if regimes is not None:
+                log.write(regime_table(res) + "\n")
+            log.write("\n")
             log.flush()
             logger.info(
                 "{} {}: CAGR {:+.1%} Sharpe {:.2f} DD {:+.1%} | SPY {:+.1%} IR {:+.2f} (t {:+.1f}) | EW {:+.1%} IR {:+.2f} (t {:+.1f})",
