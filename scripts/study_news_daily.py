@@ -138,16 +138,27 @@ def cmd_pairs(args) -> int:
 
 
 # ------------------------------------------------------------------ score
+def _score_in_child(jobs, concurrency, mock):
+    from ridethewave.signals.jev_client import score_headlines
+
+    return score_headlines(jobs, concurrency=concurrency, mock=mock)
+
+
 def cmd_score(args) -> int:
+    """Each batch runs in a child process with a wall-clock limit: a hung connection (seen 2026-09-24, about
+    16 minutes per stall, immune to asyncio timeouts because the cancel itself hangs) then costs one batch
+    of time and the pairs are retried."""
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import TimeoutError as FutTimeout
+
     from dotenv import load_dotenv
 
-    from ridethewave.signals.jev_client import HeadlineJob, score_headlines
+    from ridethewave.signals.jev_client import HeadlineJob
 
     load_dotenv(".env")
     pairs = pd.read_parquet(OUT / "pairs.parquet")
-    heads = pd.concat(
-        [pd.read_parquet(f) for f in sorted(OUT.glob("headlines_*.parquet"))], ignore_index=True
-    ).set_index("id")
+    files = sorted(OUT.glob("headlines_*.parquet"))
+    heads = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True).set_index("id")
     path = OUT / "scores.parquet"
     done = pd.read_parquet(path) if path.exists() else pd.DataFrame()
     done_keys = set(done["key"]) if len(done) else set()
@@ -164,31 +175,63 @@ def cmd_score(args) -> int:
         args.cap,
     )
     t0 = time.time()
-    for i in range(0, len(todo), args.batch):
+    pool = ProcessPoolExecutor(max_workers=1)
+    attempts: dict[str, int] = {}
+    queue = [todo.iloc[i : i + args.batch] for i in range(0, len(todo), args.batch)]
+    stalls = 0
+    scored = 0
+    while queue:
         if spent >= args.cap:
             logger.warning("spend cap ${:.0f} reached; stopping (resumable)", args.cap)
             break
-        chunk = todo.iloc[i : i + args.batch]
+        chunk = queue.pop(0)
         jobs = []
         for r in chunk.itertuples():
             h = heads.loc[r.id]
             jobs.append(
                 HeadlineJob(r.key, r.symbol, h["headline"], h["summary"] or None, h["source"], list(h["symbols"]))
             )
-        new = pd.DataFrame(score_headlines(jobs, concurrency=args.concurrency, mock=args.mock))
+        fut = pool.submit(_score_in_child, jobs, args.concurrency, args.mock)
+        try:
+            rows = fut.result(timeout=args.batch_timeout)
+        except FutTimeout:
+            stalls += 1
+            for proc in list(pool._processes.values()):
+                proc.kill()
+            pool.shutdown(wait=False, cancel_futures=True)
+            pool = ProcessPoolExecutor(max_workers=1)
+            keys = chunk["key"].tolist()
+            n = attempts.get(keys[0], 0) + 1
+            for k in keys:
+                attempts[k] = n
+            if n <= 2:
+                queue.append(chunk)  # retry later, at the back
+                logger.warning(
+                    "batch stalled ({} s); child killed, {} pairs re-queued (attempt {})",
+                    args.batch_timeout,
+                    len(keys),
+                    n,
+                )
+            else:
+                logger.warning("batch stalled three times; {} pairs skipped", len(keys))
+            continue
+        new = pd.DataFrame(rows)
         done = pd.concat([done, new], ignore_index=True) if len(done) else new
         done.to_parquet(path, index=False)
+        scored += len(new)
         spent = done["input_tokens"].fillna(0).sum() / 1e6 * 0.042
-        rate = (i + len(chunk)) / max(time.time() - t0, 1)
+        rate = scored / max(time.time() - t0, 1)
         logger.info(
-            "{:,}/{:,} scored, {} errors in batch, ${:.2f} spent, {:.0f} pairs/s, ETA {:.0f} min",
-            i + len(chunk),
-            len(todo),
+            "{:,} scored this run ({:,} left), {} errors in batch, ${:.2f} spent, {:.0f} pairs/s, {} stalls, ETA {:.0f} min",  # noqa: E501
+            scored,
+            sum(len(c) for c in queue),
             int(new["error"].notna().sum()),
             spent,
             rate,
-            (len(todo) - i - len(chunk)) / rate / 60,
+            stalls,
+            sum(len(c) for c in queue) / rate / 60 if rate else 0,
         )
+    pool.shutdown(wait=False, cancel_futures=True)
     return 0
 
 
@@ -649,12 +692,17 @@ def main() -> int:
     p.add_argument("--force", action="store_true")  # noqa: E702
     p = sub.add_parser("pairs")
     p.add_argument("--max-symbols", type=int, default=8)
-    p.add_argument("--keywords", default=None, help="only headlines/summaries containing one of these (comma-separated)")  # noqa: E501
+    p.add_argument(
+        "--keywords", default=None, help="only headlines/summaries containing one of these (comma-separated)"
+    )  # noqa: E501
     p = sub.add_parser("score")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--batch", type=int, default=2000)
     p.add_argument("--concurrency", type=int, default=32)
     p.add_argument("--cap", type=float, default=60.0, help="stop when estimated spend reaches this many dollars")
+    p.add_argument(
+        "--batch-timeout", type=float, default=90.0, help="seconds a batch may take before its child is killed"
+    )
     p.add_argument("--mock", action="store_true")
     sub.add_parser("features")
     sub.add_parser("test")
