@@ -102,14 +102,15 @@ async def _score_async(jobs: list[HeadlineJob], concurrency: int, model: str | N
     sem = asyncio.Semaphore(concurrency)
     out: list[dict] = []
     async with AsyncTypeSafeClient(
-        model=model, retry=RetryPolicy(max_retries=3, backoff_max=8.0), timeout=20.0
+        model=model, retry=RetryPolicy(max_retries=2, backoff_max=4.0), timeout=10.0
     ) as client:
 
         async def one(job: HeadlineJob):
             async with sem:
                 state = headline_state(job.symbol, job.headline, job.summary, job.source, job.symbols)
                 try:
-                    r = await client.system_one(state, HEADLINE_QUESTIONS)
+                    # a hard timeout of our own: a hung socket otherwise waits for the OS (about 15 minutes)
+                    r = await asyncio.wait_for(client.system_one(state, HEADLINE_QUESTIONS), timeout=25.0)
                     row = {
                         "key": job.key,
                         "symbol": job.symbol,
