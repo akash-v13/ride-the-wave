@@ -648,7 +648,8 @@ def main() -> int:
     p.add_argument("--batch", type=int, default=25)
     p.add_argument("--force", action="store_true")  # noqa: E702
     p = sub.add_parser("pairs")
-    p.add_argument("--max-symbols", type=int, default=8)  # noqa: E702
+    p.add_argument("--max-symbols", type=int, default=8)
+    p.add_argument("--keywords", default=None, help="only headlines/summaries containing one of these (comma-separated)")  # noqa: E501
     p = sub.add_parser("score")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--batch", type=int, default=2000)
