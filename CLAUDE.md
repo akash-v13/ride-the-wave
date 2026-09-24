@@ -32,8 +32,10 @@ The owner's full brief is in [outline.md](outline.md). The owner is comfortable 
 | 19. SPY intraday momentum study | Done 2026-09-21, rejected | docs/research/2026-09-21-spy-intraday-momentum.md |
 | 20. Opening-range breakout (long-only) and 15-minute Wave Rider | Built 2026-09-22; both in shadow as observation only | Backtests: WR-15m PF 1.00 with the market gate; ORB 0.93 was measured with the global 1% stop (hook unwired), corrected 2026-09-23 to 0.74 at 0.1 ATR and 0.91 at 0.25 ATR, shadow now 0.25 ATR. `bar_minutes` resampling and `on_session_start` daily context added. docs/research/2026-09-22-fifteen-minute-and-orb-backtests.md |
 | 23. *151 Trading Strategies* (Kakushadze & Serur) mapped; cross-sectional day-trade family | Done 2026-09-23 | Feasibility map: docs/research/2026-09-23-kakushadze-151-feasibility.md. `xs_daytrade` (feature 19: overnight reversal, previous-day momentum, intraday reversal, combo; long-only, stocks only): no ranking power (rank-IC t −0.4 / −0.9 / +0.3), every backtest combination loses (PF 0.52 to 0.91). `xs_overnight` and `xs_combo` in shadow from 2026-09-24 as observation only. Side fixes: strategy sizing/stop hooks wired in runner and backtester; `run_backtest.py` supplies daily bars; per-strategy `stocks_only` universe |
+| 24. TraderPro (owner's July 2026 platform) inventoried and extracted | Done 2026-09-23 | docs/research/2026-09-23-traderpro-extraction.md. Its 2019-26 results replicated on adjusted data with benchmarks: the returns were the hindsight mega-cap universe, not the rules; on point-in-time universes no daily stock ranking beats holding its universe and every long-short version is flat or negative. Regime classifier ported (`daily/regime.py`) |
+| 25. Daily portfolio research engine | Done 2026-09-23 | `src/ridethewave/daily/` (feature 20): 13 book strategies on adjusted daily bars (`sip-day-adj`, ten years, 320-name pool cached), next-open fills, shorts, benchmark + equal-weight curves, IR, halves, point-in-time universes. `scripts/download_daily.py`, `scripts/run_daily_backtest.py`. Not wired to live execution (needs the daily slot with shorts and overnight holds) |
 | 22. TypeScript API + web UI | Done 2026-09-23 | `web/`: Fastify on Node 26, reads SQLite, control requests queued for the bot; launchd agent `com.ridethewave.api`, http://127.0.0.1:8787. 3 vitest + 70 pytest pass. Pause/resume/flatten take effect from the first bot start after 2026-09-23. docs/features/18-typescript-api.md |
-| 21. Next engine experiments | Planned | **Short selling in the execution layer first** (unlocks the dollar-neutral stock strategies of the Kakushadze catalogue, pairs, stat-arb); ORB on a broader universe with a catalyst flag; 15-minute exits without gap-cost stops; a daily-portfolio executor with overnight holds for monthly-rebalance strategies |
+| 21. Next engine experiments | Planned | **The daily portfolio slot: short selling and overnight holds in the execution layer, shadow first** (enables the book's dollar-neutral strategies and the risk-control rules that did help); a survivorship-free pool before trusting any long-only ranking; regime classifier as a gate; ORB on a broader universe with a catalyst flag |
 | 17. Operator: kill switches, check-in reports, alerts, launchd schedule | Done 2026-09-21 | docs/features/14-operator.md. Installed with `scripts/install_launchd.py install` |
 | 14. Live feature recording | Done 2026-09-21 | Every paper day writes labelled IEX feature rows. docs/features/13-live-feature-recording.md. Active from the next bot start |
 | 11. News / sentiment filter via Jev | Validated 2026-09-21: not built | 21k pairs scored ($0.85). Positive news: no intraday edge, negative for streak entries. Down/legal news drifts lower. Decision: no confirmer; exclusion low priority; keep scoring daily headlines for the analyst and post-earnings pockets. docs/research/2026-09-21-news-jev-validation.md |
@@ -72,6 +74,7 @@ src/ridethewave/        the Python package
   backtest/             replay engine, simulated broker, reports
   storage/              SQLite schema and repositories
   ui/                   Streamlit dashboard
+  daily/                daily-bar portfolio strategies, research engine, regime classifier (feature 20)
 scripts/                entry points: run_bot, run_backtest, run_ui
 tests/                  pytest suites
 data/                   runtime files (SQLite db, caches). Gitignored.
@@ -87,7 +90,8 @@ uv run python scripts/run_ui.py                          # dashboard on :8501
 uv run python scripts/report.py close                    # a check-in page -> data/reports/
 uv run python scripts/install_launchd.py status          # scheduled agents: bot + operator tick (install | remove)
 uv run python scripts/operator_tick.py                   # what the 5-minute tick does (health check, due tasks)
-uv run pytest -q                                         # 39 tests
+uv run python scripts/run_daily_backtest.py --strategy price_momentum --universe mega_caps_20 --start 2019-01-01 --end 2026-07-24
+uv run pytest -q                                         # 82 tests
 uv run ruff check src scripts tests && uv run ruff format --check src scripts tests
 ```
 

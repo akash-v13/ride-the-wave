@@ -14,6 +14,28 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-09-23 (evening) — TraderPro extracted; daily portfolio engine built; the book's rankings tested honestly
+
+**Completed**
+
+- Inventoried the owner's July 2026 platform TraderPro (85 book strategies, own backtester, options
+  engine, regime/sentiment selector, React UI): `docs/research/2026-09-23-traderpro-extraction.md`.
+- Built the daily portfolio research engine (`src/ridethewave/daily/`, feature 20) and ported 13
+  price-only book strategies plus TraderPro's regime classifier. Ten years of adjusted daily bars
+  cached for 43 named symbols and a 320-name pool.
+- Replicated TraderPro's champions on the same universe and period: ranking reproduces, levels are
+  higher because TraderPro's data was unadjusted (splits looked like crashes); but holding its 20
+  mega caps equal-weight earned 28.7% a year, so the rules added little.
+- Point-in-time test (top 50/100 by dollar volume from a 254-stock pool, 2017 to 2026): no stock
+  ranking beats holding its own universe; all long-short versions flat or negative. ETF and index
+  rules do not beat SPY on return; volatility targeting and the 200-day rule halve the drawdown.
+
+**What this means.** The "really good profit factors" came from a hindsight universe measured
+without a benchmark. What is worth keeping from TraderPro is infrastructure and the risk controls.
+
+**Next**: the daily portfolio slot (short selling, overnight holds) in shadow mode, then a
+survivorship-free pool before trusting any long-only ranking.
+
 ## 2026-09-23 — *151 Trading Strategies* mapped; cross-sectional day trades built and tested; two shadow slots for 24 Sep
 
 **Completed**

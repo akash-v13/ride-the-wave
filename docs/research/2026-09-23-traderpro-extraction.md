@@ -1,0 +1,144 @@
+# What TraderPro had, what it found, and what was carried into Ride The Wave
+
+**Written 23 September 2026.** TraderPro (`../TraderPro`, July 2026, 22 commits, ~10k lines of
+Python plus a React dashboard) is the owner's earlier platform: many bots on Alpaca's free tier,
+85 of the 151 book strategies registered, its own daily-bar backtester, an options engine, a
+regime-and-sentiment selector. This page records what it contains, what its results actually
+say once re-run on adjusted data with a benchmark, and what was ported. Companion: the daily
+research engine in `src/ridethewave/daily/` (feature 20).
+
+## 1. Inventory
+
+| Area | What is there | Verdict for Ride The Wave |
+| --- | --- | --- |
+| Strategies (28 daily-bar classes) | §3.1 momentum, §3.4 low vol, §3.6 multifactor, §3.7 residual momentum, §3.8 pairs, §3.9/3.9.1/3.10 mean reversion, §3.11 to 3.15 MA / channel / support-resistance, §3.17 KNN, §3.20 alpha combo, §4.1 sector rotation (+MA filter, dual momentum), §4.2/4.3 alpha and R² rotation, §4.4 ETF IBS reversion, §4.5 leveraged-ETF decay, §4.6 multi-asset trend, §6.5 vol targeting, §7.3 VXX/SVXY carry, §18.3 news momentum; §3.2/3.3 need yfinance fundamentals | **Ported the 13 price-only ones** as `daily/strategies.py`; fundamentals-based, options-based and yfinance-dependent ones not |
+| Backtester | Signals on the close, fills next open + 5 bp, whole shares, target-percent of equity, daily evaluation, CAGR/Sharpe/Sortino/DD | Re-implemented on wide frames with what it lacked: benchmark and equal-weight-universe curves, information ratio with t-stat, split halves, profit factor, turnover, shorts, point-in-time universes |
+| Data | Alpaca daily bars **unadjusted** for the live path, yfinance (adjusted) as fallback; parquet cache with atomic writes; 16-minute SIP clamp | We have Algo Trader Plus: adjusted daily bars straight from Alpaca (`sip-day-adj` tag, `scripts/download_daily.py`). The unadjusted data explains its lower momentum numbers (a 10-for-1 split reads as a −90% day) |
+| Options engine | 57 declarative leg templates, own Black-Scholes and IV, chain resolver, lifecycle (DTE-first, profit target, stop), Alpaca multi-leg orders; 40 placeable, 17 sim-only (naked short legs) | Not ported yet. The template + resolver + lifecycle design is sound and self-contained; needs our own chain data path. Roadmap |
+| Selector | Regime features (SPY vs 50/200-day, 3-month return and drawdown, 20-day realised vol, VIX and VIX term ratio, sector breadth), a rule-tree classifier (crisis / bear / chop / bull / range), a scorer (0.2 regime fit + 0.35 backtest + 0.35 live P&L + 0.1 sentiment), an allocator (top 3, 45% floor, 50% cap), pending-approval runs | Port the features and classifier (pure functions); the scorer's weights were an owner directive ("P&L is king", 23 July) and need re-deciding; the allocator's constants were hard-coded |
+| Sentiment | Claude Haiku with a forced tool schema, VADER fallback, event tagger, impact-weighted 24 h aggregate | We already run Jev for headline scoring; the aggregate and event-tag ideas transfer |
+| Catalog | `strategies.yaml`: all 176 book entries with status, direction, typical universe, honest caveats and a 5-regime fitness prior | Port as data (it is the knowledge base a selector needs) |
+| Bots and risk | APScheduler cron schedules (15-min, hourly, `daily_close` at 15:50 ET), target-percent to order translation with a 1%-of-capital dead band, order guard (spread, notional, duplicates), sticky kill switch, 5% daily-loss halt, FIFO P&L with an options multiplier | Ideas match what Ride The Wave already has; the dead band and the 15:50 daily decision are the pieces the daily slot needs |
+| UI | React + lightweight-charts: leaderboard, "why did it trade" disclosure on fills, health strip with a two-step kill switch, regime heat strip | Patterns for the TypeScript UI |
+
+Known defects noted for the record: the strategy sizing hooks and per-leg multi-leg fills never
+reached its fills table; the allocator keyed capital by strategy key so the three sector-rotation
+entries collided; "resize" proposals were never applied; SimBroker had no margin check on shorts.
+
+## 2. What TraderPro recorded (its own engine, 2019-01-01 to 2026-07-24, its 20 mega caps)
+
+| Strategy | Return | CAGR | Sharpe | Max DD | Trades |
+| --- | --- | --- | --- | --- | --- |
+| residual_momentum | +473.6% | 26.1% | 1.01 | −32.9% | 746 |
+| mean_reversion_multi | +349.0% | 22.0% | 0.90 | −37.6% | 1,562 |
+| price_momentum (231/21/0.25) | +274.5% | 19.1% | 0.74 | −40.9% | 422 |
+| mean_reversion_weighted | +242.9% | 17.8% | 0.83 | −33.1% | 1,710 |
+| alpha_combo | +189.7% | 15.2% | 0.71 | −33.1% | 2,586 |
+| vol_targeting (SPY) | +149.9% | 12.9% | 0.97 | −18.5% | 0 |
+| low_volatility | +107.4% | 10.2% | 0.67 | −20.0% | 384 |
+| etf_mean_reversion (11 sectors) | +59.0% | 6.3% | 0.39 | −46.1% | 1,433 |
+| multi_asset_trend | +37.5% | 4.3% | 0.50 | −22.4% | 158 |
+| r_squared_rotation | −22.5% | −3.3% | −0.05 | −45.1% | 358 |
+| letf_decay (short TQQQ and SQQQ) | −100% | | | −100% | 46 |
+
+No benchmark was recorded next to any of these. Its universe was the 20 largest US companies
+*of July 2026* (AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, AVGO, LLY, JPM, V, UNH, XOM, MA, HD, PG,
+COST, JNJ, ABBV, WMT): the winners of the very period being tested.
+
+## 3. Replication on the new engine (adjusted data, same universe and period)
+
+| Strategy | Ours: CAGR / Sharpe / DD | TraderPro | vs SPY (17.2%): IR, t | vs equal-weight universe (28.7%, Sharpe 1.37): IR, t | Excess CAGR vs EW by half |
+| --- | --- | --- | --- | --- | --- |
+| residual_momentum | 37.9% / 1.43 / −31.9% | 26.1% / 1.01 | +1.21, 3.3 | **+0.65, 1.8** | +12.5% / +5.9% |
+| price_momentum | 37.0% / 1.26 / −37.6% | 19.1% / 0.74 | +1.03, 2.8 | +0.52, 1.4 | +7.3% / +9.5% |
+| mean_reversion_multi | 28.4% / 1.13 / −37.9% | 22.0% / 0.90 | +0.72, 2.0 | +0.07, 0.2 | −1.1% / +0.4% |
+| mean_reversion_weighted | 21.7% / 0.98 / −33.4% | 17.8% / 0.83 | +0.36, 1.0 | −0.44, −1.2 | −5.3% / −8.8% |
+| alpha_combo | 22.2% / 1.02 / −32.4% | 15.2% / 0.71 | +0.38, 1.0 | −0.40, −1.1 | −1.9% / −11.1% |
+| low_volatility | 16.2% / 1.03 / −19.8% | 10.2% / 0.67 | −0.10, −0.3 | −0.83, −2.3 | −9.9% / −15.2% |
+
+Three things to read off this table.
+
+1. **The ranking replicates; the levels do not, and ours are the right ones.** Every strategy
+   scores higher here because TraderPro fed its momentum rules unadjusted Alpaca prices: NVDA, AVGO,
+   WMT, GOOGL, AMZN and TSLA all split inside the window and each split looked like a crash.
+2. **Most of the return is the universe, not the rule.** Holding the 20 names equal-weight earned
+   28.7% a year with a Sharpe of 1.37. Against that benchmark, mean reversion in all its forms adds
+   nothing or subtracts, low volatility subtracts a lot, and only the two momentum rankings add
+   (6 to 12 points of CAGR a year, positive in both halves, t-statistics 1.4 to 1.8: suggestive,
+   not conclusive).
+3. **Profit factor on round trips is not the right lens for a rebalanced portfolio.** Momentum's
+   PF of 1.5 on 790 trades understates a curve that compounds at 38%; the multi-asset trend rule
+   shows PF 0.04 while earning 6% a year, because its many small trims book as losses while the
+   gains sit in positions that never fully close. Read the curve statistics and the IR.
+
+## 4. ETF and index rules, 2017-01-01 to 2026-09-22 (SPY: 15.3% CAGR, Sharpe 0.89, max DD −33.8%)
+
+| Strategy | CAGR | Sharpe | Max DD | IR vs SPY (t) |
+| --- | --- | --- | --- | --- |
+| sector_rotation §4.1 (top 3 of 11, 6-month) | 10.5% | 0.66 | −32.3% | −0.44 (−1.4) |
+| + 150-day MA filter §4.1.1 | 5.2% | 0.39 | −33.0% | −0.69 (−2.2) |
+| + dual momentum §4.1.2 (SPY > 200-day else IEF) | 6.0% | 0.50 | −23.8% | −0.56 (−1.8) |
+| multi_asset_trend §4.6 (defaults) | 6.4% | 0.73 | −14.1% | −0.55 (−1.7) |
+| multi_asset_trend, 12-month, momentum/σ weights | 9.1% | 0.91 | −18.1% | −0.40 (−1.2) |
+| ibs_mean_reversion §4.4 on sectors | −0.9% | 0.05 | −43.7% | −1.51 (−4.7) |
+| vol_targeting §6.5 on SPY (15% target) | 12.6% | **0.99** | **−19.4%** | −0.40 (−1.2) |
+| ma_rule SPY 20/50 §3.12 | 9.5% | 0.84 | −28.1% | −0.45 (−1.4) |
+| ma_rule SPY price vs 200-day §3.11 | 10.7% | 0.90 | **−19.5%** | −0.37 (−1.2) |
+| ma_rule QQQ 3/10/21 §3.13 | 4.7% | 0.57 | −15.1% | −0.69 (−2.2) |
+
+Nothing beats holding SPY on return in a decade that rewarded holding SPY; volatility targeting and
+the 200-day rule buy a much smaller drawdown for about 3 to 5 points of CAGR, which is what the
+literature says they do. The daily IBS reversion on sector ETFs is a transaction-cost machine
+(turnover 1.4 per day) and loses.
+
+## 5. Point-in-time stock universes (the honest test)
+
+_Universe = top 50 or top 100 of a 254-stock pool by trailing 20-day dollar volume, ranked each day
+from prior data only; pool = today's top 320 names by dollar volume minus funds (survivorship
+remains at the pool level, ranking is point-in-time). 2017-01-01 to 2026-09-22. Filled in below._
+
+| Strategy (universe) | CAGR | Sharpe | Max DD | vs SPY: IR (t) | vs equal-weight universe (27.4%, Sharpe 1.24): IR (t) | Excess vs EW by half |
+| --- | --- | --- | --- | --- | --- | --- |
+| residual_momentum (top 50) | 24.8% | 0.87 | −38.9% | +0.51 (1.6) | +0.02 (0.1) | −2.3% / −3.0% |
+| residual_momentum (top 100) | 26.5% | 1.00 | −34.2% | +0.65 (2.0) | +0.04 (0.1) | +0.3% / −2.4% |
+| residual_momentum long-short (top 100) | 1.7% | 0.21 | −22.9% | −0.63 | −0.98 | |
+| price_momentum (top 50) | 27.0% | 0.89 | −38.9% | +0.58 (1.8) | +0.13 (0.4) | −2.9% / +2.1% |
+| price_momentum (top 100) | 28.8% | 1.01 | −35.0% | +0.71 (2.2) | +0.18 (0.6) | +0.0% / +2.6% |
+| price_momentum long-short (top 100) | 4.8% | 0.43 | −18.3% | −0.49 | −0.88 | |
+| mean_reversion (top 50) | 15.0% | 0.63 | −45.1% | +0.13 (0.4) | −0.54 (−1.7) | −9.2% / −15.4% |
+| mean_reversion long-short (top 100) | −3.1% | −0.24 | −36.8% | −0.98 | −1.35 | |
+| mean_reversion_weighted (top 100) | 16.1% | 0.77 | −41.9% | +0.14 (0.4) | −0.80 (−2.5) | −13.2% / −9.1% |
+| alpha_combo (top 100) | 23.0% | 1.05 | −33.8% | +0.64 (2.0) | −0.30 (−0.9) | −5.5% / −3.3% |
+| low_volatility (top 100) | 12.0% | 0.86 | −28.9% | −0.40 (−1.2) | −1.06 (−3.3) | −13.3% / −17.1% |
+| multifactor (top 100) | 14.5% | 0.91 | −30.7% | −0.12 (−0.4) | −1.00 (−3.1) | −13.2% / −12.4% |
+
+**Reading.** Against SPY, long-only momentum looks excellent (t up to 2.2). Against the universe it
+is drawn from, it is nothing: information ratios of 0.0 to 0.2, excess return that flips sign across
+halves. Every mean-reversion, low-volatility and multifactor ranking is worse than holding the
+universe. Every long-short construction, which is what the book actually describes, is flat or
+negative after 5 bp a side: the spread between the top and bottom of these rankings does not pay
+for its own trading. The 27.4% a year of the equal-weight universe is the survivorship of a pool
+picked by today's dollar volume plus the fact that heavily traded names were the decade's winners;
+it is not a strategy anyone could have chosen in 2017.
+
+So the result that matters from the whole TraderPro exercise is negative and clear: **on the data
+we have, none of the book's daily stock rankings adds return over its own universe, and the
+dollar-neutral versions lose.** The two things that did something useful were risk controls
+(volatility targeting, the 200-day rule: same Sharpe as SPY with half the drawdown).
+
+## 6. What was ported, and what comes next
+
+Ported today: the 13 price-only daily strategies, the backtester with honest benchmarks, the
+adjusted daily data path, point-in-time universes, the long-range downloader. Not yet: live
+execution of daily portfolios (needs short selling and overnight holds in the execution layer, the
+"daily slot"), the regime classifier and catalog, the options engine, the UI patterns.
+
+Also ported: the regime features and rule-tree classifier (`daily/regime.py`, pure functions with
+reasons; VIX optional since Alpaca has no index symbols).
+
+Order of work proposed, given the results: (1) a daily "portfolio slot" with short selling and
+overnight holds, in shadow first, because it is the enabling piece for every dollar-neutral
+strategy in the book and for the risk-control rules that did help; (2) a survivorship-free pool
+(historical index membership or point-in-time listings) before trusting any long-only ranking; (3)
+the regime classifier as a research gate over the intraday strategies; (4) the catalog as data;
+(5) options once a chain data path exists.

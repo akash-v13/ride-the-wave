@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from alpaca.data.enums import DataFeed
+from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, StockSnapshotRequest
 from alpaca.data.timeframe import TimeFrame
@@ -164,20 +164,31 @@ class HistoricalBars:
 
 
 class DailyBars:
-    """Daily SIP bars, cached under feed tag ``sip-day``. Used to build point-in-time universes."""
+    """Daily SIP bars, cached under feed tag ``sip-day`` (raw prices: what the tape printed, used for
+    point-in-time universes and session context) or ``sip-day-adj`` (adjusted for splits and dividends,
+    used by the daily research engine, where a 10-for-1 split must not look like a 90% crash)."""
 
     FEED_TAG = "sip-day"
+    ADJ_TAG = "sip-day-adj"
 
-    def __init__(self, client: StockHistoricalDataClient, db: Database | None):
+    def __init__(self, client: StockHistoricalDataClient, db: Database | None, adjustment: str = "raw"):
         self.client = client
         self.db = db
         self.calls = 0
+        self.adjustment = Adjustment(adjustment)
+        self.feed_tag = self.FEED_TAG if self.adjustment == Adjustment.RAW else self.ADJ_TAG
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=1, max=8), reraise=True)
     def _fetch(self, symbols: list[str], start: datetime, end: datetime) -> list[Bar]:
         self.calls += 1
         req = StockBarsRequest(
-            symbol_or_symbols=symbols, timeframe=TimeFrame.Day, start=start, end=end, feed=DataFeed.SIP, limit=None
+            symbol_or_symbols=symbols,
+            timeframe=TimeFrame.Day,
+            start=start,
+            end=end,
+            feed=DataFeed.SIP,
+            limit=None,
+            adjustment=self.adjustment,
         )
         resp = self.client.get_stock_bars(req)
         data = resp.data if hasattr(resp, "data") else resp
@@ -194,7 +205,7 @@ class DailyBars:
         result: list[Bar] = []
         todo: list[str] = []
         for sym in symbols:
-            cached = self.db.bars.range(sym, s_utc, e_utc, self.FEED_TAG) if self.db is not None else []
+            cached = self.db.bars.range(sym, s_utc, e_utc, self.feed_tag) if self.db is not None else []
             if cached:
                 result.extend(cached)
             else:
@@ -207,7 +218,7 @@ class DailyBars:
                 logger.warning("daily bars fetch failed for {} symbols: {}", len(chunk), e)
                 continue
             if self.db is not None and got:
-                self.db.bars.upsert_many(got, feed=self.FEED_TAG)
+                self.db.bars.upsert_many(got, feed=self.feed_tag)
             result.extend(got)
             logger.debug("daily bars: {} symbols -> {} bars ({} calls so far)", len(chunk), len(got), self.calls)
         result.sort(key=lambda b: (b.symbol, b.ts))
