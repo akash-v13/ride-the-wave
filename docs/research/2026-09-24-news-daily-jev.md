@@ -60,6 +60,34 @@ Event pockets (excess return over the universe, basis points, +20 days t with a 
    records about two releases per symbol-year because only months inside the universe were scored.
    It is usable for option-risk hygiene (avoiding short premium through earnings), not as a signal.
 
+## Follow-up: shorting on bad news (asked by the owner, 2026-09-24)
+
+Forward excess return over the equal-weight universe after each kind of negative, relevant, fresh
+item (the direction question says "down"), from the next open. Positive numbers mean the stock
+*rose* relative to its peers, so a short would have lost.
+
+| Negative event | n | +1 d bp | +5 d bp | +20 d bp | t (+20 d) | halves +20 d |
+| --- | --- | --- | --- | --- | --- | --- |
+| earnings release, down | 3,706 | +2 | +6 | −32 | −0.3 | −56 / −10 |
+| guidance change, down | 1,632 | +3 | +15 | 0 | −0.1 | +61 / −55 |
+| regulatory decision, down | 5,774 | +5 | +7 | +95 | +0.8 | +117 / +76 |
+| offering or dilution | 1,571 | +24 | +42 | +43 | +0.4 | −38 / +116 |
+| M&A, down | 1,028 | −11 | −21 | −53 | 0.0 | −94 / −21 |
+| management change, down | 1,033 | −12 | +7 | +23 | +0.2 | −8 / +48 |
+| analyst action, down | 12,355 | +9 | +13 | +4 | −0.3 | +12 / −3 |
+| product or contract, down | 6,203 | +5 | +20 | +62 | +0.4 | +70 / +54 |
+| any material negative event | 10,781 | +2 | +4 | +22 | +0.2 | +18 / +25 |
+| material, confident (p_down > 0.7) and unexpected | 2,236 | +8 | −11 | +9 | 0.0 | −11 / +25 |
+| toxic flag (fraud, restatement, going concern, dilution) | 983 | +24 | +27 | −22 | 0.0 | −94 / +37 |
+| durable and down (p_durable > 0.7) | 12,097 | +4 | +8 | +26 | +0.4 | +37 / +16 |
+
+In the 100 most-traded stocks, a short opened at the next open after bad news lost on average in
+every category except the two smallest (earnings releases down: −32 bp over a month, halves −56 and
+−10, t −0.3; M&A down: −53 bp, t 0.0). Regulatory bad news and product bad news were followed by
+recoveries of 60 to 95 bp. The market over-reacts to bad news in large caps by the open, and the
+month after is a partial bounce. Shorting on sentiment in this universe is a losing strategy; the
+only candidate is post-earnings drift on the downside, which is too weak here to trade and, in the
+literature, lives in smaller companies.
 ## Decisions
 
 - No news feature enters any strategy or the universe. The scores are kept (they are the cheapest
