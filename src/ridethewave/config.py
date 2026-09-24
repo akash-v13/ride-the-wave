@@ -165,6 +165,26 @@ class StrategySpec(_Strict):
     params: dict = Field(default_factory=dict)
 
 
+class PortfolioSpec(_Strict):
+    """One entry under ``portfolios:``: a daily-bar strategy (registry in ridethewave.daily) decided once a day
+    at ``decision_time`` ET, holding overnight, long or short. Shadow mode only for now: fills are simulated
+    against live prices and nothing reaches Alpaca. ``id`` is the accounting key (positions, trades, ledger)."""
+
+    id: str
+    kind: str  # daily registry name: price_momentum | residual_momentum | vol_targeting | ...
+    enabled: bool = True
+    mode: Literal["shadow"] = "shadow"
+    weight: float = Field(1.0, ge=0)  # capital = base_allocation * weight
+    universe: str = (
+        "mega_caps_20"  # named universe, comma-separated symbols, or "scan" (the bot's universe, funds removed)
+    )
+    rebalance_days: int = Field(1, ge=1)
+    decision_time: time = time(15, 50)
+    slippage_bps: float = Field(5.0, ge=0)
+    max_gross: float = Field(1.0, gt=0, le=3)
+    params: dict = Field(default_factory=dict)
+
+
 class RiskSettings(_Strict):
     """Kill switches the bot applies to itself. See docs/features/14-operator.md."""
 
@@ -211,9 +231,11 @@ class Settings(_Strict):
         default_factory=lambda: [StrategySpec(id="wave_rider", kind="wave_rider", mode="live", weight=1.0)]
     )
 
+    portfolios: list[PortfolioSpec] = Field(default_factory=list)
+
     @model_validator(mode="after")
     def _strategy_ids_unique(self) -> Settings:
-        ids = [x.id for x in self.strategies]
+        ids = [x.id for x in self.strategies] + [x.id for x in self.portfolios]
         if len(ids) != len(set(ids)):
             raise ValueError(f"duplicate strategy ids: {ids}")
         if not any(x.enabled for x in self.strategies):

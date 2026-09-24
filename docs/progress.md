@@ -33,7 +33,12 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 **What this means.** The "really good profit factors" came from a hindsight universe measured
 without a benchmark. What is worth keeping from TraderPro is infrastructure and the risk controls.
 
-**Next**: the daily portfolio slot (short selling, overnight holds) in shadow mode, then a
+**Also built tonight**: the daily portfolio slot (feature 21). Two observation portfolios run in
+shadow from 24 September, deciding at 15:50 ET and holding overnight: `pm_megacaps` (12-1 momentum on
+the 20 mega caps) and `vt_spy` (volatility targeting on SPY). Positions and cash survive restarts;
+shorts are allowed; nothing reaches Alpaca.
+
+**Next**: observe the two portfolios, then short selling and overnight holds on the paper account; a
 survivorship-free pool before trusting any long-only ranking.
 
 ## 2026-09-23 — *151 Trading Strategies* mapped; cross-sectional day trades built and tested; two shadow slots for 24 Sep

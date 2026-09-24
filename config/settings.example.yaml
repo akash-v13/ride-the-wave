@@ -94,6 +94,18 @@ strategies:                    # accounting key `id`; `mode: shadow` = simulated
     weight: 0.5
     params: {signal: combo, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
 
+portfolios:                    # daily-bar portfolios (feature 21): decided once a day at decision_time, held overnight,
+  - id: pm_megacaps            # long or short. SHADOW ONLY: simulated fills on live prices, nothing reaches Alpaca.
+    kind: price_momentum       # 12-1 momentum, top 30% of the 20 mega caps. Backtest 2019-26: 37% CAGR vs 28.7% for
+    universe: mega_caps_20     # holding the universe (IR 0.5); on point-in-time universes it adds nothing. Observation.
+    weight: 1.0                # capital = base_allocation * weight
+    params: {formation_days: 231, skip_days: 21, fraction: 0.3}
+  - id: vt_spy                 # volatility targeting on SPY (15% target): same Sharpe as SPY with half the drawdown
+    kind: vol_targeting        # in 2017-26. Observation.
+    universe: spy
+    weight: 1.0
+    params: {symbol: SPY, target_vol: 0.15, vol_days: 20, max_leverage: 1.0}
+
 risk:                          # kill switches, see docs/features/14-operator.md
   max_daily_loss_pct: 2.0      # realised loss as % of allocation -> flatten and halt entries (0 disables)
   max_open_loss_pct: 3.0       # realised + unrealised

@@ -57,7 +57,7 @@ class Signal:
 
 @dataclass(slots=True)
 class Position:
-    """The bot's own record of an open long position."""
+    """The bot's own record of an open position. ``qty`` is negative for a short (daily portfolio slots)."""
 
     symbol: str
     qty: float
@@ -84,7 +84,8 @@ class Position:
     def unrealized_pct(self) -> float:
         if self.entry_price == 0:
             return 0.0
-        return (self.last_price / self.entry_price - 1.0) * 100.0
+        sign = -1.0 if self.qty < 0 else 1.0
+        return (self.last_price / self.entry_price - 1.0) * 100.0 * sign
 
 
 @dataclass(slots=True)
@@ -113,7 +114,8 @@ class Trade:
     def pnl_pct(self) -> float:
         if self.entry_price == 0:
             return 0.0
-        return (self.exit_price / self.entry_price - 1.0) * 100.0
+        sign = -1.0 if self.qty < 0 else 1.0  # a short profits when the price falls
+        return (self.exit_price / self.entry_price - 1.0) * 100.0 * sign
 
 
 @dataclass(slots=True)

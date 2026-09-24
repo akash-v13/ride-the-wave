@@ -89,6 +89,6 @@ class TradingEngine:
     def persist_positions(self) -> None:
         if self.db is None:
             return
-        self.db.positions.clear()
+        self.db.positions.clear(self.orders.strategy)  # only this slot's rows; other slots and portfolios keep theirs
         for pos in self.book.positions.values():
             self.db.positions.upsert(pos, self.run_id, exit_trigger=self.strategy.exit_trigger(pos))

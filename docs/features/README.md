@@ -22,3 +22,4 @@ One page per feature, in plain English: what it does, how to use it, which setti
 18. [TypeScript API and web UI](18-typescript-api.md)
 19. [Cross-sectional day trades from 151 Trading Strategies (shadow)](19-cross-sectional-daytrade.md)
 20. [Daily portfolio engine (research)](20-daily-portfolio-engine.md)
+21. [Daily portfolio slots (overnight, long or short; shadow)](21-daily-portfolio-slot.md)

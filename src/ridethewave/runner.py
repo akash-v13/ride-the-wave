@@ -18,6 +18,9 @@ from loguru import logger
 
 from ridethewave.clients import AlpacaClients
 from ridethewave.config import Settings, StrategySpec
+from ridethewave.daily.data import Panel
+from ridethewave.daily.strategies import build_daily
+from ridethewave.daily.universe import resolve as resolve_daily_universe
 from ridethewave.data.bars import BarAggregator
 from ridethewave.data.market_data import DailyBars, HistoricalBars, SnapshotPoller
 from ridethewave.data.universe import UniverseBuilder
@@ -29,6 +32,7 @@ from ridethewave.features.live import LiveFeatureRecorder
 from ridethewave.models import Signal, SignalType
 from ridethewave.operator.risk import RiskMonitor
 from ridethewave.portfolio import CapitalAllocator, build_ledger
+from ridethewave.portfolio.daily_slot import DailySlot
 from ridethewave.storage import Database
 from ridethewave.strategy import Strategy, build
 
@@ -71,6 +75,8 @@ class BotRunner:
         self.poller = SnapshotPoller(clients.data, settings.alpaca.data_feed)
         self.history = HistoricalBars(clients.data, db, feed=settings.alpaca.data_feed)
         self.daily = DailyBars(clients.data, db)
+        self.daily_adj = DailyBars(clients.data, db, adjustment="all")
+        self.portfolios: list[DailySlot] = []
         self.universe_builder = UniverseBuilder(clients, settings.universe, settings.alpaca.data_feed)
         self.agg = BarAggregator(window=420)
         self.recorder = LiveFeatureRecorder(db, settings, feed=settings.alpaca.data_feed)
@@ -101,6 +107,7 @@ class BotRunner:
         self._keep_awake()
         self._rebuild_universe()
         self._build_slots(today)
+        self._build_portfolios(today)
         self._reconcile()
         self._warmup()
         self._session_start(today)
@@ -121,6 +128,17 @@ class BotRunner:
                     "symbols": len(sl.symbols),
                 }
                 for sl in self.slots
+            ]
+            + [
+                {
+                    "id": ps.spec.id,
+                    "kind": ps.spec.kind,
+                    "mode": ps.spec.mode,
+                    "allocation": ps.capital,
+                    "symbols": len(ps.universe),
+                    "portfolio": True,
+                }
+                for ps in self.portfolios
             ],
         )
         self.db.state.set(
@@ -141,11 +159,20 @@ class BotRunner:
 
         if dry_run:
             self._tick(datetime.now(timezone.utc))
+            for ps in self.portfolios:  # what each portfolio would do right now, without saving anything
+                probe = DailySlot(ps.spec, ps.strategy, None, LIVE_RUN_ID, ps.capital)
+                probe.universe = ps.universe
+                try:
+                    self._decide_portfolio(probe, datetime.now(timezone.utc), today)
+                    logger.info("[{}] dry-run targets: {}", ps.spec.id, probe.last_targets)
+                except Exception as e:  # noqa: BLE001
+                    logger.exception("[{}] dry-run decision failed: {}", ps.spec.id, e)
             logger.info(
-                "dry run complete: {} snapshots, {} bars in aggregator, positions {}",
+                "dry run complete: {} snapshots, {} bars in aggregator, positions {}, portfolios {}",
                 self.poller.calls,
                 sum(len(self.agg.history(s)) for s in self.agg.symbols()),
                 {sl.spec.id: len(sl.book.positions) for sl in self.slots},
+                {ps.spec.id: ps.snapshot() for ps in self.portfolios},
             )
             return
 
@@ -171,6 +198,7 @@ class BotRunner:
                                 sl.orders.flatten_all(now)
                             sl.orders.cancel_pending_entries()
                         flattened = True
+                self._portfolio_decisions(now)
                 if time.monotonic() - last_clock_check > 60:
                     clk = self.broker.clock()
                     # closed is only believed after the open has passed (guards a stale or early clock read)
@@ -262,6 +290,88 @@ class BotRunner:
                     allocation,
                     base_share,
                 )
+            )
+
+    # ------------------------------------------------------------------ daily portfolio slots
+    def _build_portfolios(self, today: str) -> None:
+        for spec in self.s.portfolios:
+            if not spec.enabled:
+                continue
+            strategy = build_daily(spec.kind, spec.params)
+            slot = DailySlot(spec, strategy, self.db, LIVE_RUN_ID, self.s.capital.base_allocation * spec.weight)
+            slot.load()
+            slot.universe = self._portfolio_universe(spec)
+            self.portfolios.append(slot)
+            logger.info(
+                "[{}] portfolio slot: {} on {} symbols, {} at {}, capital ${:,.0f}",
+                spec.id,
+                spec.kind,
+                len(slot.universe),
+                spec.mode,
+                spec.decision_time.strftime("%H:%M"),
+                slot.capital,
+            )
+
+    def _portfolio_universe(self, spec) -> list[str]:
+        if spec.universe == "scan":
+            try:
+                funds = self.universe_builder.fund_symbols(self.universe)
+            except Exception:  # noqa: BLE001
+                funds = set()
+            return [x for x in self.universe if x not in funds]
+        return resolve_daily_universe(spec.universe)
+
+    def _portfolio_symbols(self, ps: DailySlot) -> list[str]:
+        extra = {MARKET}
+        for attr in ("symbol", "defensive"):
+            v = getattr(ps.strategy.p, attr, None)
+            if v:
+                extra.add(v)
+        return sorted(set(ps.universe) | set(ps.positions) | extra)
+
+    def _mark_portfolio(self, ps: DailySlot) -> None:
+        if not ps.positions:
+            return
+        snaps = self.poller.poll(list(ps.positions))
+        ps.mark({sym: r.tick.price for sym, r in snaps.items()})
+
+    def _portfolio_decisions(self, now: datetime) -> None:
+        """At each slot's decision time: adjusted history plus today's bar, then targets, then simulated fills."""
+        today = now.astimezone(ET).strftime("%Y-%m-%d")
+        for ps in self.portfolios:
+            if ps.decided_on == today or now.astimezone(ET).time() < ps.spec.decision_time:
+                continue
+            try:
+                self._decide_portfolio(ps, now, today)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("[{}] decision failed: {}", ps.spec.id, e)
+                ps.decided_on = today  # do not retry every tick
+
+    def _decide_portfolio(self, ps: DailySlot, now: datetime, today: str) -> None:
+        from datetime import date as _date
+
+        symbols = self._portfolio_symbols(ps)
+        d = _date.fromisoformat(today)
+        s_utc = datetime.combine(d - timedelta(days=600), datetime.min.time(), timezone.utc)
+        e_utc = datetime.combine(d, datetime.min.time(), timezone.utc) - timedelta(seconds=1)
+        history = self.daily_adj._fetch(symbols, s_utc, e_utc)  # always fresh: the cache is fetch-once
+        snaps = self.poller.poll(symbols)
+        prices = {sym: r.tick.price for sym, r in snaps.items() if r.tick.price > 0}
+        todays = [r.daily_bar for r in snaps.values() if r.daily_bar is not None]
+        panel = _panel_from_bars(history, todays, d)
+        if panel is None:
+            logger.warning("[{}] no daily history; decision skipped", ps.spec.id)
+            ps.decided_on = today
+            return
+        fills = ps.decide(panel, prices, now, ps.universe)
+        for f in fills:
+            logger.info(
+                "[{}] fill {} {:+.0f} @ {:.2f} (target {:+.1%})",
+                ps.spec.id,
+                f["symbol"],
+                f["qty"],
+                f["price"],
+                f["target"],
             )
 
     def _symbols_for(self, strategy) -> list[str]:
@@ -389,6 +499,7 @@ class BotRunner:
                     }
                     for sl in self.slots
                 },
+                "portfolios": {ps.spec.id: ps.snapshot() for ps in self.portfolios},
             },
         )
         if self.tick_no % 20 == 0:
@@ -569,6 +680,24 @@ class BotRunner:
                     ledger.wins,
                     ledger.next_allocation,
                 )
+            for ps in self.portfolios:
+                try:
+                    self._mark_portfolio(ps)
+                    prev = self.db.ledger.latest_before(today, LIVE_RUN_ID, ps.spec.id)
+                    led = ps.ledger(today, prev, self.s.capital)
+                    self.db.ledger.upsert(led)
+                    logger.info(
+                        "ledger {} [{}/{}]: realized {:+.2f} on {} trades, {} held overnight, equity ${:,.2f}",
+                        today,
+                        ps.spec.id,
+                        ps.spec.mode,
+                        led.realized_pnl,
+                        led.trades,
+                        len(ps.positions),
+                        ps.last_equity,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.exception("[{}] ledger failed: {}", ps.spec.id, e)
             self._label_features(today)
         except Exception as e:  # noqa: BLE001
             logger.exception("shutdown bookkeeping failed: {}", e)
@@ -589,3 +718,21 @@ class BotRunner:
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("feature labelling failed: {}", e)
+
+
+def _panel_from_bars(history, todays, day) -> Panel | None:
+    """Wide frames from adjusted daily history plus today's (raw, in-progress) bars appended as today's row."""
+    import pandas as pd
+
+    rows = [(b.symbol, b.ts.astimezone(ET).date(), b.open, b.high, b.low, b.close, b.volume) for b in history]
+    rows = [r for r in rows if r[1] < day]
+    rows += [(b.symbol, day, b.open, b.high, b.low, b.close, b.volume) for b in todays]
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=["symbol", "day", "open", "high", "low", "close", "volume"])
+    df["day"] = pd.to_datetime(df["day"])
+    wide = {
+        c: df.pivot(index="day", columns="symbol", values=c).sort_index()
+        for c in ("open", "high", "low", "close", "volume")
+    }
+    return Panel(**wide)
