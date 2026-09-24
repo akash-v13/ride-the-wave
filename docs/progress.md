@@ -14,6 +14,57 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## Where the last session stopped (2026-09-23, late evening) — read this first
+
+**State of the system.** Everything is committed locally (no GitHub remote yet). 91 tests pass, lint
+clean. Tomorrow 24 September the bot runs from launchd: Wave Rider live; in shadow: 15-minute Wave
+Rider, ORB (0.25 ATR), `xs_overnight`, `xs_combo`, two daily portfolios (`pm_megacaps`, `vt_spy`,
+deciding 15:50 ET, holding overnight) and three options structures (`ic_spy` with the VRP gate,
+`bps_qqq`, `cc_aapl`, deciding 15:40 ET). Check with `curl localhost:8787/api/health` or the reports.
+
+**What the evidence says so far.** No strategy tested has an edge: intraday patterns are noise on
+our data; the book's daily stock rankings do not beat their own universe, on a survivorship-free
+point-in-time universe from 2017, in the 2023-26 window, or by regime (momentum's only pocket is
+high-volatility chop, t 1.0 to 1.6; shorting the bottom of a momentum ranking loses 17-21 points a
+year in bull trends, t -2.6 to -3.2). TraderPro's profit factors were a hindsight universe. Risk
+overlays (vol targeting, 200-day rule) halve drawdowns at equal Sharpe. Details:
+`docs/research/2026-09-23-traderpro-extraction.md` sections 3 to 5c.
+
+**The discussion in progress when the session ended.** The owner asked whether news sentiment could
+drive the universe and what other non-financial influences exist; the answer given (news predicts
+volatility and attention, not direction, except multi-day pockets such as post-earnings drift and
+negative/legal news) and the ranked list of other influences are in the chat only, so the essentials
+are repeated here:
+
+- Other influences worth testing, by evidence and availability: macro calendar (pre-FOMC drift, CPI),
+  calendar effects (turn of month, quarter end, expiration), options-implied features (IV rank, skew,
+  volatility risk premium; we hold the data), short interest (FINRA), insider transactions (EDGAR),
+  earnings calendar (outside feed; unlocks post-earnings drift), attention (search, Reddit; reversal),
+  credit spread and cross-asset regime inputs. Principle: separate "what moves" (volatility, attention)
+  from "which way" (direction); most non-financial data is the first kind and belongs in the selector.
+- **Pending decision (the owner has loaded Jev credits):** the news study design. Proposed: keep the six
+  existing Jev questions (version 2026-09-21.1, `src/ridethewave/signals/jev_questions.py`) unchanged,
+  add two ("durable": does the information change the outlook over the coming weeks; "surprise": was
+  it anticipated), bump the version, score the Alpaca news archive (reaches back to 2015) for the
+  survivorship-free monthly top-100 universe 2019-2026 (about $40), re-score the September pairs with
+  the new set for comparability, and build daily per-symbol features: headline counts (1 and 5 days,
+  relative to the name's own history), impact-weighted sentiment with a 5-day decay, share of
+  negative/legal items, earnings flag.
+- Four pre-registered tests with kill criteria: (1) does abnormal news volume predict next-5-day realised
+  volatility beyond past volatility (drop if under 10% added explanatory power); (2) does sentiment
+  predict 1/5/20-day excess return over the universe by quintile (drop if no spread reaches t 2 in both
+  halves); (3) do the exclusion (fresh negative/legal) and the tilt (earnings-up) lift momentum's IR
+  against its universe by at least 0.2; (4) does a universe ranked by news materiality beat the
+  dollar-volume universe. Then the zero-cost tests: calendar effects and options-implied features on
+  data already held.
+- After that, in order: the options backtester from Alpaca's option bars (February 2024 onward),
+  the overnight-effect brief in `docs/strategy-intake.md`, fill reconciliation before any options slot
+  goes live.
+
+**Owner items still open.** `gh auth login` then
+`gh repo create ride-the-wave --private --source=. --remote=origin --push` (five local commits waiting);
+`sudo pmset repeat wakeorpoweron MTWRF 08:05:00`; strategy briefs go in `docs/strategies/inbox/`.
+
 ## 2026-09-23 (late) — Capability map and strategy intake
 
 - `docs/alpaca-capabilities.md`: everything the account and data plan enable versus what the bot uses.

@@ -111,6 +111,13 @@ typesafe-sdk 0.6.0 installed under the `jev` dependency group) and the plan for 
 sentiment universe filter. Owner is on the early-access waitlist; no key yet. Load the skill whenever
 Jev, TypeSafe, headline scoring, or a news filter comes up.
 
+## Where the last session stopped
+
+**2026-09-23, late evening.** The owner restarted the session for model updates mid-discussion. Read the
+handoff block at the top of `docs/progress.md` first: system state, what runs on 24 September, the
+evidence so far, the news-study design awaiting the owner's go (two new Jev questions, four
+pre-registered tests, Jev credits loaded), and the order of work after it.
+
 ## Strategy intake and Alpaca capabilities
 
 The owner hands strategies over as briefs in `docs/strategies/inbox/` (format: `docs/strategy-intake.md`);
