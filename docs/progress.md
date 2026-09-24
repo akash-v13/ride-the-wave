@@ -34,6 +34,12 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 **Next**: momentum leaning into high-volatility markets; fill reconciliation before any options slot
 goes live.
 
+**Also (24 September, small hours).** Two short-side questions from the owner answered with data:
+shorting large caps on negative news loses in nearly every event category (they bounce); post-earnings
+drift in ranks 101 to 1000 has the textbook shape (−58 bp a month after a crash of over 8%, +33 bp after a
+jump of over 8%) but t-statistics near zero and hit rates of 52 to 55%, so it is not tradable here
+either. Both recorded in `docs/research/2026-09-24-news-daily-jev.md`. Jev spend so far: $30.43.
+
 ## 2026-09-24 (early morning) — News study done and rejected; a benchmark bug found and fixed
 
 **Completed**

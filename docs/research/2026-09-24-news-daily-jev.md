@@ -88,6 +88,39 @@ recoveries of 60 to 95 bp. The market over-reacts to bad news in large caps by t
 month after is a partial bounce. Shorting on sentiment in this universe is a losing strategy; the
 only candidate is post-earnings drift on the downside, which is too weak here to trade and, in the
 literature, lives in smaller companies.
+## Follow-up: post-earnings drift below the top 100 (asked by the owner, 2026-09-24)
+
+The one short-side pocket that survived above was earnings; the literature puts post-earnings drift
+in smaller, thinly covered companies. Universe: ranks 101 to 1000 by dollar volume, monthly and
+point-in-time (2,149 distinct names, active and delisted). 686,000 headlines fetched, 113,173
+earnings-related headline-symbol pairs scored with Jev ($7.29, zero errors), 25,754 earnings releases
+identified on 1,782 symbols, 2019 to 2026. Drift measured from the next open after the reaction day,
+in excess of the band's equal-weight return; t uses day clusters and a square-root-of-horizon
+correction. Script: `scripts/study_news_daily.py pead`; data `data/research/news_pead/`.
+
+| Reaction-day return | n | +5 d bp | +20 d bp | +40 d bp | t (+20 d) | halves +20 d | share negative at +20 d |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| below −8% | 2,684 | −14 | −58 | −97 | −0.2 | −80 / −43 | 55% |
+| −8% to −4% | 3,246 | −2 | +25 | +16 | +0.3 | +35 / +15 | 52% |
+| −4% to −1% | 4,625 | −4 | −4 | +16 | +0.2 | −17 / +10 | 52% |
+| −1% to +1% | 4,187 | −2 | −11 | −43 | −0.2 | +9 / −37 | 52% |
+| +1% to +4% | 4,762 | −8 | +5 | −11 | −0.2 | +37 / −32 | 51% |
+| +4% to +8% | 3,484 | +2 | +5 | +8 | +0.1 | +33 / −22 | 51% |
+| above +8% | 2,766 | +15 | +33 | +46 | 0.0 | +75 / +1 | 52% |
+
+By Jev's reading of the release rather than the price: "down" releases +13 bp at 20 days (t 0.2,
+halves +58 / −35); "down" with a reaction below −4%: −17 bp at 20 days, −37 at 40 (t −0.1);
+"up" with a reaction above +4%: +17 and +20 bp (t 0.0).
+
+**Reading.** The shape is the textbook one, drift continues in the direction of the reaction at the
+extremes (−58 bp after a crash of more than 8%, +33 bp after a jump of more than 8% at 20 days, both
+growing to 40 days), and the size is a fraction of what the older literature reports. It is not
+statistically distinguishable from zero in this sample (t 0.2 at best) and the hit rate is 52 to
+55%. After spreads and borrow on small caps, which are wider than the 5 bp assumed here, the short
+side of this is not a strategy either; the long side after big positive surprises is the better
+half of it and still thin. Verdict: post-earnings drift exists in this universe in the expected
+shape but is too small and too noisy to trade with these tools.
+
 ## Decisions
 
 - No news feature enters any strategy or the universe. The scores are kept (they are the cheapest

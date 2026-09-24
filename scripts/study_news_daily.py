@@ -714,14 +714,16 @@ def main() -> int:
     OUT = Path(args.out)
     logger.remove()
     logger.add(sys.stderr, level="INFO")
-    return {
+    cmds = {
         "universe": cmd_universe,
         "fetch": cmd_fetch,
         "pairs": cmd_pairs,
         "score": cmd_score,
         "features": cmd_features,
         "test": cmd_test,
-    }[args.cmd](args)
+        "pead": cmd_pead,
+    }
+    return cmds[args.cmd](args)
 
 
 if __name__ == "__main__":
