@@ -14,6 +14,26 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-09-24 (morning) — Options backtest: the first family that holds up on risk
+
+**Completed**
+
+- Downloaded daily bars for every SPY, QQQ and IWM option on the monthly expiries since March 2024,
+  including expired contracts and the holiday-shifted expiries. Built a backtester that rebuilds each
+  past day's chain and runs the bot's own options slot through it (`docs/research/2026-09-24-options-backtest.md`).
+- 144 configurations. Iron condors lose (the inherited 2% strikes lost everything on SPY in a rising
+  market). The bull put spread with strikes 5% and 10% out, entered only when options are expensive
+  relative to realised volatility, held to expiry, matched or beat each index's risk-adjusted return
+  with about a third of its drawdown, positive in both halves on all three. It sat out the April 2025
+  crash because the gate was closed, then entered when premiums were richest.
+- Caveat: one bull market, one crash, about 20 trades each. A candidate to observe, not a proven edge.
+- The shadow options slots now run exactly these tested settings: `bps_spy`, `bps_qqq`, `cc_qqq`.
+- Two engine fixes: the strike distance is now a setting (it was fixed at 1% per step), and structures
+  are sized from current equity instead of starting capital.
+
+**Next**: momentum leaning into high-volatility markets; fill reconciliation before any options slot
+goes live.
+
 ## 2026-09-24 (early morning) — News study done and rejected; a benchmark bug found and fixed
 
 **Completed**

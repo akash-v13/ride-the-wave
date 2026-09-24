@@ -38,6 +38,7 @@ The owner's full brief is in [outline.md](outline.md). The owner is comfortable 
 | 27. Options engine and options slots | Built 2026-09-23, shadow only | `src/ridethewave/options/` (feature 22): 57 structure templates, Black-Scholes, OPRA chain snapshots, resolver, sizing and exit rules, options slots with shadow fills or live multi-leg orders (paper account is options level 3, verified; docs/api/options.md). Three observation slots from 2026-09-24: `ic_spy` (iron condor, VRP gate), `bps_qqq` (bull put spread), `cc_aapl` (covered call). No backtester yet |
 | 28. News as a daily feature (Jev, 2019-2026) | Done 2026-09-24, rejected | 357,240 pairs scored with question set 2026-09-24.1 ($23.14, 0 errors); all four pre-registered tests fail in the survivorship-free top 100. docs/research/2026-09-24-news-daily-jev.md |
 | 29. Daily engine benchmark correction | Done 2026-09-24 | The equal-weight universe averaged every name ever selected (hindsight). Now point-in-time, with a test. Corrected: universe 16.8%/yr 2017-26 (was 22.4%); long-only price momentum beats it by 5.0/8.9 pts by half, IR 0.51 (t 1.6); residual momentum in high-vol chop t 2.4; long-short still loses. `pm_megacaps` replaced by `pm_actives` (live most-actives universe). Research page section 5d |
+| 30. Options backtester | Done 2026-09-24 | Chains rebuilt from Alpaca daily option bars (Feb 2024 on, SPY/QQQ/IWM monthlies), replayed through the production OptionsSlot; 144 configurations. Best defined-risk: bull put spread 5%/10% OTM, vrp gate, hold: QQQ Sharpe 1.56 (index 1.08), SPY 1.13 (1.16), DD a third of the index's; ~20 trades each. Iron condors lose. Shadow slots now `bps_spy`, `bps_qqq`, `cc_qqq`. docs/research/2026-09-24-options-backtest.md |
 | 22. TypeScript API + web UI | Done 2026-09-23 | `web/`: Fastify on Node 26, reads SQLite, control requests queued for the bot; launchd agent `com.ridethewave.api`, http://127.0.0.1:8787. 3 vitest + 70 pytest pass. Pause/resume/flatten take effect from the first bot start after 2026-09-23. docs/features/18-typescript-api.md |
 | 21. Next engine experiments | Planned | Short selling and overnight holds on the **paper account** (the shadow daily slot exists; promote after observation); a survivorship-free pool before trusting any long-only ranking; regime classifier as a gate; ORB on a broader universe with a catalyst flag; the book's dollar-neutral strategies as daily slots |
 | 17. Operator: kill switches, check-in reports, alerts, launchd schedule | Done 2026-09-21 | docs/features/14-operator.md. Installed with `scripts/install_launchd.py install` |
@@ -96,7 +97,8 @@ uv run python scripts/report.py close                    # a check-in page -> da
 uv run python scripts/install_launchd.py status          # scheduled agents: bot + operator tick (install | remove)
 uv run python scripts/operator_tick.py                   # what the 5-minute tick does (health check, due tasks)
 uv run python scripts/run_daily_backtest.py --strategy price_momentum --universe mega_caps_20 --start 2019-01-01 --end 2026-07-24
-uv run pytest -q                                         # 92 tests
+uv run python scripts/backtest_options.py                 # options grid on rebuilt chains (download_option_history.py first)
+uv run pytest -q                                         # 93 tests
 uv run ruff check src scripts tests && uv run ruff format --check src scripts tests
 ```
 
@@ -118,8 +120,10 @@ Jev, TypeSafe, headline scoring, or a news filter comes up.
 **2026-09-24, early morning.** The news study ran and failed all four pre-registered tests (phase 28). A
 benchmark bug in the daily engine was found and fixed (phase 29); on the corrected benchmark long-only
 price momentum is the leading daily candidate (IR 0.51, t 1.6, both halves positive) and runs in shadow as
-`pm_actives`. Next in order: the options backtester (Alpaca option bars from February 2024), a gated
-momentum variant (lean into high-volatility chop), fill reconciliation before any options slot goes live.
+`pm_actives`. The options backtester is done (phase 30): the vrp-gated bull put spread is the best defined-risk
+result and runs in shadow on SPY and QQQ. Next in order: a gated momentum variant (lean into
+high-volatility chop), fill reconciliation before any options slot goes live, a sizer fix for
+undefined-risk structures.
 Handoff detail: top of `docs/progress.md`.
 
 ## Strategy intake and Alpaca capabilities

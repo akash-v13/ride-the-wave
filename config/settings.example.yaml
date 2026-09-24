@@ -106,21 +106,38 @@ portfolios:                    # daily-bar portfolios (feature 21): decided once
     weight: 1.0
     params: {symbol: SPY, target_vol: 0.15, vol_days: 20, max_leverage: 1.0}
 
-options:                       # option structures (feature 22): one template per slot, at most one open, decided at
-  - id: ic_spy                 # decision_time ET. SHADOW: legs filled against live OPRA quotes, nothing reaches Alpaca.
-    template: long_iron_condor # sell the inner strangle ~2% out, buy the wings ~4% out; ~35 days; close at 50% of max
-    underlying: SPY            # profit, at 2x the credit lost, or 7 days before expiry.
-    weight: 2.0                # capital $20,000 (fictional)
-    entry_gate: vrp            # only when ATM implied vol exceeds 20-day realised vol by 3 points
+options:                       # option structures (feature 22). SHADOW: legs filled against live OPRA quotes, nothing reaches
+                               # Alpaca. Settings from the 2024-26 options backtest (docs/research/2026-09-24-options-backtest.md):
+  - id: bps_spy                # bull put spread: sell the put ~5% out, buy the put ~10% out, ~35 days, only when ATM implied vol
+    template: bull_put_spread  # exceeds 20-day realised vol by 3 points, held to the day before expiry.
+    underlying: SPY            # Backtest: +28.8%, Sharpe 1.13 (SPY 1.16), max DD -7.2% (SPY -19.0%), 20 trades, 95% wins.
+    weight: 2.0
+    strike_step_pct: 0.025
+    entry_gate: vrp
     vrp_threshold: 0.03
-  - id: bps_qqq                # bull put spread on QQQ: sell the ~2% OTM put, buy the ~4% OTM put; no gate.
+    profit_target_pct: 1.0
+    stop_mult: 10.0
+    close_dte: 1
+  - id: bps_qqq                # same on QQQ. Backtest: +52.6%, Sharpe 1.56 (QQQ 1.08), max DD -9.8% (QQQ -22.9%), 21 trades.
     template: bull_put_spread
     underlying: QQQ
-    weight: 1.0
-  - id: cc_aapl                # covered call on AAPL: 100 shares + a ~2% OTM call. Needs the stock, so a bigger fictional
-    template: covered_call     # capital; exercises the stock-leg path.
-    underlying: AAPL
-    weight: 5.0
+    weight: 2.0
+    strike_step_pct: 0.025
+    entry_gate: vrp
+    vrp_threshold: 0.03
+    profit_target_pct: 1.0
+    stop_mult: 10.0
+    close_dte: 1
+  - id: cc_qqq                 # covered call on QQQ: 100 shares + the call ~5% out, same gate and exits. Backtest: +30.0%,
+    template: covered_call     # Sharpe 1.64, max DD -6.2%, 21 trades; mostly the stock's own return with the upside capped.
+    underlying: QQQ
+    weight: 8.0                # 100 QQQ shares need about $72k of fictional capital
+    strike_step_pct: 0.025
+    entry_gate: vrp
+    vrp_threshold: 0.03
+    profit_target_pct: 1.0
+    stop_mult: 10.0
+    close_dte: 1
 
 risk:                          # kill switches, see docs/features/14-operator.md
   max_daily_loss_pct: 2.0      # realised loss as % of allocation -> flatten and halt entries (0 disables)

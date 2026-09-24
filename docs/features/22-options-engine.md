@@ -43,8 +43,11 @@ against the live chain and prints what it would open, without saving. The heartb
 `options` block; open structures are in the `structures` table; closed ones appear as trades with
 the symbol `UNDERLYING:template`.
 
-**Not yet.** Backtests (Alpaca serves historical option bars, so a chain-reconstruction backtester
-is possible); fill reconciliation for live orders (the books assume mid); the web page has no
+**Backtests.** `scripts/download_option_history.py` then `scripts/backtest_options.py`: chains rebuilt
+from daily option bars since February 2024, replayed through this same slot code. Results in
+`docs/research/2026-09-24-options-backtest.md`; the shadow slots use the best defined-risk settings from it.
+
+**Not yet.** Fill reconciliation for live orders (the books assume mid); the web page has no
 structures tab yet.
 
 **Code:** `src/ridethewave/options/` (structures, greeks, chain, resolver, lifecycle, slot); runner

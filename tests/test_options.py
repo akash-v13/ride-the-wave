@@ -169,3 +169,14 @@ def test_config_rules():
     assert s.options[0].decision_time.strftime("%H:%M") == "15:40"
     with pytest.raises(ValueError):
         Settings.model_validate({"options": [{"id": "wave_rider", "template": "collar"}]})
+
+
+def test_strike_step_widens_the_structure():
+    ch = synthetic_chain()
+    narrow = resolve(get_template("long_iron_condor"), ch, target_dte=30, step_pct=0.01)
+    wide = resolve(get_template("long_iron_condor"), ch, target_dte=30, step_pct=0.025)
+    assert narrow.legs[1].strike == 98 and wide.legs[1].strike == 95  # short put 2 steps out
+    spec = OptionsSpec(id="w", template="long_iron_condor", underlying="TST", dte_target=30, strike_step_pct=0.025)
+    slot = OptionsSlot(spec, None, "live", capital=20_000)
+    slot.decide(TODAY, NOW, 100.0, {}, {"TST": 100.0}, lambda lo, hi: ch)
+    assert slot.open[0].legs[1]["strike"] == 95

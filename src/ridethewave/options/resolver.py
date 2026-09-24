@@ -78,6 +78,7 @@ def resolve(
     chain: ChainSnapshot,
     target_dte: int = 30,
     far_dte_offset: int = 30,
+    step_pct: float | None = None,
 ) -> ResolvedStructure:
     near_expiry = _pick_expiry(chain, target_dte)
     far_expiry = _pick_expiry(chain, target_dte + far_dte_offset)
@@ -103,7 +104,7 @@ def resolve(
         expiry = far_expiry if leg.expiry == "far" else near_expiry
         right = "C" if leg.instrument == "call" else "P"
         grid = _strike_grid(chain, expiry, right)
-        contract = _resolve_strike(leg, grid, chain.spot, resolved)
+        contract = _resolve_strike(leg, grid, chain.spot, resolved, step_pct or STEP_PCT)
         resolved.append(
             ResolvedLeg(
                 symbol=contract.symbol,
@@ -139,7 +140,9 @@ def resolve(
 STEP_PCT = 0.01
 
 
-def _resolve_strike(leg: Leg, grid: list[OptionContract], spot: float, resolved: list[ResolvedLeg]) -> OptionContract:
+def _resolve_strike(
+    leg: Leg, grid: list[OptionContract], spot: float, resolved: list[ResolvedLeg], step_pct: float = 0.01
+) -> OptionContract:
     rule = leg.strike
     if rule is None:
         raise ResolutionError("option leg missing strike rule")
@@ -156,7 +159,7 @@ def _resolve_strike(leg: Leg, grid: list[OptionContract], spot: float, resolved:
     is_call = grid[0].right == "C"
     # OTM: calls above spot, puts below. ITM: the reverse.
     direction = 1 if (rule.kind == "otm") == is_call else -1
-    target = spot * (1 + direction * rule.n * STEP_PCT)
+    target = spot * (1 + direction * rule.n * step_pct)
     contract = _nearest(grid, target)
     if contract.strike == grid[atm_i].strike and rule.n != 0:
         # target collapsed onto ATM (coarse grid) — take one grid step outward

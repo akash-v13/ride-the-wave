@@ -170,11 +170,18 @@ class OptionsSlot:
             return "no entry: empty chain"
         try:
             resolved = resolve(
-                self.template, chain, target_dte=self.spec.dte_target, far_dte_offset=self.spec.far_dte_offset
+                self.template,
+                chain,
+                target_dte=self.spec.dte_target,
+                far_dte_offset=self.spec.far_dte_offset,
+                step_pct=self.spec.strike_step_pct,
             )
         except ResolutionError as e:
             return f"no entry: resolution failed ({e})"
-        qty = size_structure(resolved, self.capital, self.spec.risk_fraction, self.spec.max_risk_pct)
+        equity = self.equity()  # size from what is left, never from the starting capital
+        if equity <= 0:
+            return "no entry: equity exhausted"
+        qty = size_structure(resolved, equity, self.spec.risk_fraction, self.spec.max_risk_pct)
         if qty is None:
             return f"no entry: one unit of {resolved.template_id} exceeds the capital (${self.capital:,.0f})"
         legs = leg_dicts(resolved)

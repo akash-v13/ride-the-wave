@@ -208,6 +208,7 @@ class OptionsSpec(_Strict):
     vrp_threshold: float = Field(0.03, ge=0)
     decision_time: time = time(15, 40)
     spread_fraction: float = Field(0.25, ge=0, le=1)  # shadow fills pay this fraction of the half-spread per leg
+    strike_step_pct: float = Field(0.01, gt=0, le=0.1)  # one template "step" of moneyness, as a fraction of spot
 
     @model_validator(mode="after")
     def _template_known_and_placeable(self) -> OptionsSpec:
