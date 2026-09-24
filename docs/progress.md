@@ -57,6 +57,15 @@ are repeated here:
   against its universe by at least 0.2; (4) does a universe ranked by news materiality beat the
   dollar-volume universe. Then the zero-cost tests: calendar effects and options-implied features on
   data already held.
+- **Reframing agreed in the last exchange:** Jev is the right tool for turning text into typed events
+  cheaply and the wrong tool for forecasting direction (the September test showed direction is priced
+  before the headline exists). So the news study's questions should be event extraction first:
+  relevance (is the company the subject or only mentioned), a finer event type (earnings release,
+  guidance change, upcoming-earnings-date announcement, M&A, FDA/regulatory decision, offering or
+  dilution, analyst action, product, macro), surprise, durability, materiality, negative/legal, toxic.
+  Two uses that fall out of it are worth more than sentiment: an earnings calendar reconstructed from
+  the archive (Alpaca has none; unlocks post-earnings drift) and a market-wide macro-event-day feature
+  for the regime classifier. Counts, volatility and returns do the predicting; Jev does the reading.
 - After that, in order: the options backtester from Alpaca's option bars (February 2024 onward),
   the overnight-effect brief in `docs/strategy-intake.md`, fill reconciliation before any options slot
   goes live.
