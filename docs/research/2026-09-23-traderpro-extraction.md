@@ -126,6 +126,35 @@ we have, none of the book's daily stock rankings adds return over its own univer
 dollar-neutral versions lose.** The two things that did something useful were risk controls
 (volatility targeting, the 200-day rule: same Sharpe as SPY with half the drawdown).
 
+## 5b. The same test on a survivorship-free universe ("started in January 2017")
+
+Pool: every NYSE, Nasdaq and Arca stock Alpaca has ever listed, active or delisted (7,786 after
+removing funds; 12.2 million daily bars since 2016 in `data/daily_panel/`, script
+`scripts/download_universe_history.py`), filtered to names with a median price above $5 and median
+dollar volume above $2 million (3,129 symbols). Universe: each month, the top 100 by trailing
+20-day dollar volume using only prior data; 446 names were ever selected, 39 of them since
+delisted. Replay 2017-01-01 to 2026-09-22, $100,000, next-open fills, 5 bp a side. Script:
+`scripts/study_survivorship_free.py`; log `data/research/daily/survivorship-free.log`.
+
+| Strategy | CAGR | Sharpe | Max DD | vs SPY (15.3%): IR (t) | vs equal-weight universe (22.4%, Sharpe 1.05): IR (t) | Excess vs EW by half |
+| --- | --- | --- | --- | --- | --- | --- |
+| price_momentum | 23.9% | 0.83 | −36.6% | +0.47 (1.5) | +0.18 (0.6) | −8.3% / +9.9% |
+| price_momentum long-short | 4.7% | 0.39 | −18.9% | −0.45 | −0.65 | |
+| residual_momentum | 20.7% | 0.78 | −43.9% | +0.36 (1.1) | +0.03 (0.1) | −7.7% / +3.1% |
+| residual_momentum long-short | 2.1% | 0.23 | −23.3% | −0.58 | −0.76 | |
+| alpha_combo | 18.0% | 0.81 | −33.8% | +0.25 (0.8) | −0.23 (−0.7) | −13.8% / +3.6% |
+| mean_reversion | 12.1% | 0.53 | −51.1% | 0.00 (0.0) | −0.42 (−1.3) | −16.0% / −5.2% |
+| mean_reversion long-short | −2.4% | −0.14 | −32.6% | −0.91 | −1.13 | |
+| mean_reversion_weighted | 13.0% | 0.63 | −41.1% | −0.06 (−0.2) | −0.59 (−1.8) | −19.4% / −0.3% |
+| low_volatility | 11.7% | 0.84 | −29.3% | −0.42 (−1.3) | −0.75 (−2.3) | −18.9% / −3.2% |
+| multifactor | 14.7% | 0.90 | −29.3% | −0.09 (−0.3) | −0.57 (−1.8) | −18.9% / +2.7% |
+
+Same picture as section 5, with the universe premium smaller once the dead names are back (22.4%
+a year instead of 27.4%). No ranking beats holding its own universe with any statistical weight;
+momentum's excess flips sign between halves; every long-short version is flat or negative. This is
+the "if we had started in 2017" answer the owner asked for: the book's daily stock rankings, as
+implemented in TraderPro, would not have paid for their own trading.
+
 ## 6. What was ported, and what comes next
 
 Ported today: the 13 price-only daily strategies, the backtester with honest benchmarks, the
