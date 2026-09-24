@@ -79,9 +79,9 @@ def main() -> int:
                 }
             )
             print(
-                f"{und} {tpl:22s} step {step:.3f} gate {gate:4s} {ex_name:7s} | ret {m['total_return']:+7.1%} CAGR {m['cagr']:+6.1%} "
-                f"Sharpe {m['sharpe']:+.2f} DD {m['max_dd']:+6.1%} | {m['trades']:3d} tr win {m['win_rate']:.0%} PF {m['profit_factor']:.2f} "
-                f"| halves {m['h1_return']:+.1%}/{m['h2_return']:+.1%} | {und} {m['underlying_return']:+.1%} Sh {m['underlying_sharpe']:.2f}",
+                f"{und} {tpl:22s} step {step:.3f} gate {gate:4s} {ex_name:7s} | ret {m['total_return']:+7.1%} CAGR {m['cagr']:+6.1%} "  # noqa: E501
+                f"Sharpe {m['sharpe']:+.2f} DD {m['max_dd']:+6.1%} | {m['trades']:3d} tr win {m['win_rate']:.0%} PF {m['profit_factor']:.2f} "  # noqa: E501
+                f"| halves {m['h1_return']:+.1%}/{m['h2_return']:+.1%} | {und} {m['underlying_return']:+.1%} Sh {m['underlying_sharpe']:.2f}",  # noqa: E501
                 flush=True,
             )
     df = pd.DataFrame(rows)
