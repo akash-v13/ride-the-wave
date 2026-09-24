@@ -196,6 +196,42 @@ the table is negative: the short leg loses about 17 to 21 points a year in bull 
 −3.2). Whatever else is built, shorting the bottom of a momentum ranking in an uptrend is the thing
 not to do.
 
+## 5d. Correction (2026-09-24): the equal-weight benchmark was not point-in-time
+
+The daily engine's "equal-weight universe" curve averaged the returns of **every name ever selected**
+during the run, not the names in the universe on each day. A stock that entered the top 100 in 2024
+because it had risen was counted from 2017. That is a hindsight benchmark and it made the universe look
+better than any investor could have held. Fixed in `ridethewave/daily/engine.py` (each day's benchmark
+return is the mean over the names in the universe at the previous close) with a regression test
+(`test_equal_weight_benchmark_is_point_in_time`). Sections 3 and 4 used fixed lists and are unaffected;
+sections 5, 5b and 5c are superseded by the tables below. Section 5 (the 320-name pool) also carries
+pool-level survivorship and is not re-run.
+
+**Survivorship-free, monthly point-in-time top 100, 2017-01-01 to 2026-09-22** (true universe: 16.8% a
+year, Sharpe 0.80, max DD −38.8%; SPY 15.3%):
+
+| Strategy | CAGR | vs universe IR (t) | Excess by half | Bull trend | High-vol chop |
+| --- | --- | --- | --- | --- | --- |
+| price_momentum | 23.9% | **+0.51 (1.6)** | **+5.0% / +8.9%** | +6.9% (1.1) | +27.8% (1.6) |
+| residual_momentum | 20.7% | +0.35 (1.1) | +5.6% / +2.1% | +1.3% (0.2) | **+41.0% (2.4)** |
+| alpha_combo | 18.0% | +0.12 (0.4) | −0.6% / +2.7% | 0.0% | +8.1% (0.6) |
+| mean_reversion | 12.1% | −0.16 (−0.5) | −2.8% / −6.2% | −4.1% | 0.0% |
+| mean_reversion_weighted | 13.0% | −0.25 (−0.8) | −6.2% / −1.2% | −4.1% | −0.8% |
+| low_volatility | 11.7% | −0.39 (−1.2) | −5.6% / −4.2% | | |
+| price_momentum long-short | 4.7% | −0.51 (−1.6) | −18.6% / −5.5% | −13.3% (−2.3) | −17.1% |
+| residual_momentum long-short | 2.1% | −0.61 (−1.9) | −20.0% / −9.3% | −17.3% (−2.8) | −12.6% |
+| mean_reversion long-short | −2.4% | −0.87 (−2.7) | −23.0% / −15.1% | −21.1% (−2.9) | −44.3% |
+
+**2023-01-01 to 2026-09-22 only** (true universe 29.7%): price momentum 40.6%, IR +0.62 (t 1.2);
+residual momentum 36.8%, IR +0.51 (t 1.0); every long-short version IR −1.0 to −1.2.
+
+**What changes.** Long-only price momentum now clears two of the three gates in
+`docs/strategy-intake.md` (IR above the universe ≥ 0.5, positive in both halves) and falls short on
+the third (t 1.6 against 2). Residual momentum in high-volatility chop is the first result in the
+project with t above 2, on 231 days. Nothing changes for the short side: shorting the bottom of these
+rankings loses heavily in bull trends. Momentum long-only, optionally leaning harder into chop, is now
+the leading daily candidate; the `pm_megacaps` shadow slot should move to the point-in-time universe.
+
 ## 6. What was ported, and what comes next
 
 Ported today: the 13 price-only daily strategies, the backtester with honest benchmarks, the

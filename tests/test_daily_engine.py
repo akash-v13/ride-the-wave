@@ -141,3 +141,22 @@ def test_point_in_time_universe_ranks_by_prior_dollar_volume():
     top = fn(day)
     assert top[0] == "SPY" and len(top) == 2
     assert fn(panel.close.index[0].date()) == []  # nothing before the first bar
+
+
+def test_equal_weight_benchmark_is_point_in_time():
+    """The universe benchmark must only hold names that were in the universe at the previous close:
+    DOWN is in the universe for the first half only, UP for the second half only."""
+    panel = make_panel()
+    days = panel.close.index
+    mid = days[200].date()
+
+    def ufn(d):
+        return ["DOWN", "FLAT"] if d < mid else ["UP", "FLAT"]
+
+    res = run_daily(LongUp(), panel, days[50].date(), days[350].date(), universe_fn=ufn, capital=10_000)
+    ew = res.equal_weight.pct_change().dropna()
+    rets = panel.close.pct_change()
+    first = ew.index[(ew.index > days[51]) & (ew.index < days[199])]
+    second = ew.index[ew.index > days[202]]
+    assert np.allclose(ew.loc[first], rets.loc[first, ["DOWN", "FLAT"]].mean(axis=1), atol=1e-12)
+    assert np.allclose(ew.loc[second], rets.loc[second, ["UP", "FLAT"]].mean(axis=1), atol=1e-12)

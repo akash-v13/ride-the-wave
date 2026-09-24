@@ -117,6 +117,7 @@ def run_daily(
     weight_rows: dict[pd.Timestamp, dict[str, float]] = {}
     logs: list[str] = []
     seen_syms: set[str] = set(universe)
+    members: dict[pd.Timestamp, list[str]] = {}
     since_rebalance = rebalance_days  # rebalance on the first active day
 
     for day in active:
@@ -143,6 +144,9 @@ def run_daily(
         # 2. mark at the close
         eq = book.equity(closes_ffill.loc[day])
         equity_pts.append((day, eq))
+        # point-in-time membership for the equal-weight benchmark: the universe as of this close is what an
+        # investor holding "the universe" would hold into the next session
+        members[day] = [x for x in (universe_fn(day.date()) if universe_fn else universe) if x in panel.close.columns]
         # 3. new targets on the close (not on the final day: nothing could fill)
         since_rebalance += 1
         if since_rebalance >= rebalance_days and day != active[-1]:
@@ -181,7 +185,17 @@ def run_daily(
     ew = None
     cols = [s for s in seen_syms if s in panel.close.columns]
     if cols:
-        rets = closes_ffill.loc[equity.index, cols].pct_change().mean(axis=1).fillna(0.0)
+        # each day's return is the mean over the names that were in the universe at the PREVIOUS close
+        # (fixed 2026-09-24: this used to average every name ever selected, a hindsight benchmark)
+        day_rets = closes_ffill.loc[equity.index, cols].pct_change()
+        ew_r = []
+        prev = None
+        for d in equity.index:
+            names = members.get(prev, []) if prev is not None else []
+            row = day_rets.loc[d, [n for n in names if n in day_rets.columns]].dropna() if names else []
+            ew_r.append(float(row.mean()) if len(row) else 0.0)
+            prev = d
+        rets = pd.Series(ew_r, index=equity.index)
         ew = ((1 + rets).cumprod() * capital).rename("equal_weight")
     reb_days = sorted(weight_rows)
     weights = pd.DataFrame([weight_rows[d] for d in reb_days], index=pd.DatetimeIndex(reb_days)).fillna(0.0)

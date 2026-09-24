@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typesafe_sdk import Choice, Noul, Score
 
-QUESTIONS_VERSION = "2026-09-21.1"
+QUESTIONS_VERSION = "2026-09-24.1"  # 2026-09-21.1 = the first six questions only
 
 
 def headline_state(symbol: str, headline: str, summary: str | None, source: str | None, symbols: list[str]) -> dict:
@@ -80,3 +80,51 @@ HEADLINE_QUESTIONS = {
         ),
     ),
 }
+
+# ---- added 2026-09-24 for the daily news study (event extraction; the six above are unchanged) ----
+HEADLINE_QUESTIONS["relevant"] = Noul(
+    instructions=(
+        "Is the company in `symbol` the main subject of this item, rather than one of several companies mentioned "
+        "or named only in passing?"
+    ),
+    criteria={
+        "true": "the item is mainly about this company: its results, products, deals, people, legal matters, ratings",
+        "false": "the company appears in a list, a roundup, a sector or market story, "
+        "or a story mainly about another company",
+    },
+)
+HEADLINE_QUESTIONS["event"] = Choice(
+    instructions="Which event, if any, does this item report for the company in `symbol`?",
+    criteria={
+        "earnings_release": "quarterly or annual results have been reported",
+        "guidance_change": "the company raises, lowers or withdraws its outlook, outside a results release",
+        "earnings_date": "announces or previews the date of an upcoming results release",
+        "mna": "merger, acquisition, divestiture, takeover bid or activist stake",
+        "regulatory_decision": "FDA or other regulator approval, rejection, ruling, fine or investigation",
+        "offering_or_dilution": "share offering, convertible issue, large insider or holder sale",
+        "capital_return": "buyback, dividend initiation or change, special dividend",
+        "analyst_action": "rating change, price target change, initiation of coverage",
+        "product_or_contract": "product launch, recall, contract win or loss, partnership",
+        "management_change": "CEO, CFO or board change",
+        "macro_or_sector": "economy, rates, tariffs, sector-wide news",
+        "no_event": "commentary, recap, list, opinion, or nothing new about this company",
+    },
+)
+HEADLINE_QUESTIONS["surprise"] = Score(
+    instructions="How unexpected is this news for investors in the company in `symbol`?",
+    criteria=[
+        "expected: scheduled, widely anticipated, or already known before this item",
+        "partly anticipated: the event was expected but the details or size are new",
+        "unexpected: new information the market was unlikely to have anticipated",
+    ],
+)
+HEADLINE_QUESTIONS["durable"] = Noul(
+    instructions=(
+        "Does this news change the outlook for the company in `symbol` over the coming weeks or months, rather than "
+        "being a one-day story?"
+    ),
+    criteria={
+        "true": "affects expected revenue, earnings, costs, ownership or legal standing beyond the next few days",
+        "false": "a one-day item: commentary, a routine note, a price-move recap, or no company-specific information",
+    },
+)

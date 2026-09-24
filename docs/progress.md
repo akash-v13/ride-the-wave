@@ -14,7 +14,28 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
-## Where the last session stopped (2026-09-23, late evening) — read this first
+## 2026-09-24 (early morning) — News study done and rejected; a benchmark bug found and fixed
+
+**Completed**
+
+- **News as a daily feature** (`docs/research/2026-09-24-news-daily-jev.md`): Jev scored 357,240
+  headline-symbol pairs from 2019 to 2026 with the new question set (relevance, event type, surprise,
+  durability added); $23.14, zero errors. All four pre-registered tests fail: news volume does not help
+  forecast volatility, sentiment does not predict returns, it does not improve momentum, and a
+  news-ranked universe does not beat the ordinary one. Negative or legal news tends to recover over the
+  next month, which is why excluding it hurt. No news feature is adopted; the scores are kept.
+- **Benchmark bug fixed.** The daily engine's "hold the universe" comparison averaged every stock that
+  was ever in the universe, including those that got in later because they had risen. Corrected to
+  point-in-time with a test. On the honest benchmark the universe earned 16.8% a year (not 22.4%), and
+  long-only price momentum beats it by 5 to 9 points a year in both halves (information ratio 0.51,
+  t 1.6): the leading daily candidate, still short of the t ≥ 2 gate.
+- The momentum shadow portfolio now uses the live most-active universe (`pm_actives`) instead of the
+  hindsight list of 20 mega caps.
+
+**Next**: the options backtester; a momentum variant that leans into high-volatility markets (the one
+result with t above 2); fill reconciliation before any options slot goes live.
+
+## Handoff of 2026-09-23, late evening (superseded by the entry above)
 
 **State of the system.** Everything is committed locally (no GitHub remote yet). 91 tests pass, lint
 clean. Tomorrow 24 September the bot runs from launchd: Wave Rider live; in shadow: 15-minute Wave

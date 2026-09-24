@@ -47,6 +47,22 @@ def flatten(answers: dict) -> dict:
         "kind_conf": float(get(k, "confidence")),
         "p_stale": float(get(answers["stale"], "noul")),
         "p_toxic": float(get(answers["toxic"], "noul")),
+        **_flatten_v2(answers, get),
+    }
+
+
+def _flatten_v2(answers: dict, get) -> dict:
+    """The four questions added in 2026-09-24.1; absent from older scores."""
+    if "event" not in answers:
+        return {}
+    e, sp = answers["event"], answers["surprise"]
+    return {
+        "p_relevant": float(get(answers["relevant"], "noul")),
+        "event": get(e, "choice"),
+        "event_conf": float(get(e, "confidence")),
+        "surprise": float(get(sp, "score")),
+        "surprise_conf": float(get(sp, "confidence")),
+        "p_durable": float(get(answers["durable"], "noul")),
     }
 
 
@@ -73,6 +89,10 @@ def mock_answers(job: HeadlineJob) -> dict:
         "kind": {"choice": kinds[(h >> 48) % len(kinds)], "confidence": 0.5},
         "stale": {"noul": ((h >> 56) % 1000) / 1000},
         "toxic": {"noul": ((h >> 64) % 1000) / 10000},
+        "relevant": {"noul": ((h >> 72) % 1000) / 1000},
+        "event": {"choice": "no_event", "confidence": 0.5},
+        "surprise": {"score": ((h >> 80) % 200) / 100, "confidence": 0.5},
+        "durable": {"noul": ((h >> 88) % 1000) / 1000},
     }
 
 

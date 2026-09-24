@@ -95,10 +95,10 @@ strategies:                    # accounting key `id`; `mode: shadow` = simulated
     params: {signal: combo, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
 
 portfolios:                    # daily-bar portfolios (feature 21): decided once a day at decision_time, held overnight,
-  - id: pm_megacaps            # long or short. SHADOW ONLY: simulated fills on live prices, nothing reaches Alpaca.
-    kind: price_momentum       # 12-1 momentum, top 30% of the 20 mega caps. Backtest 2019-26: 37% CAGR vs 28.7% for
-    universe: mega_caps_20     # holding the universe (IR 0.5); on point-in-time universes it adds nothing. Observation.
-    weight: 1.0                # capital = base_allocation * weight
+  - id: pm_actives             # 12-1 price momentum, top 30% of the bot's live universe (most actives, funds removed):
+    kind: price_momentum       # point-in-time by construction. Backtest 2017-26 on a survivorship-free top 100: 23.9%
+    universe: scan             # a year vs 16.8% for the universe, IR +0.51 (t 1.6), positive both halves. Leading
+    weight: 1.0                # daily candidate; observation. (Replaced pm_megacaps, a hindsight list, 2026-09-24.)
     params: {formation_days: 231, skip_days: 21, fraction: 0.3}
   - id: vt_spy                 # volatility targeting on SPY (15% target): same Sharpe as SPY with half the drawdown
     kind: vol_targeting        # in 2017-26. Observation.
