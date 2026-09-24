@@ -14,6 +14,20 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-09-24 (session review) — First live trade; two operational fixes
+
+- **Session.** Wave Rider's first live trade: 30 SRZN at $32.48 at 10:42 ET, stopped out a minute later at
+  $32.11 (−$11.10) by the 1% server stop. All shadow strategies flat. The volatility-targeting portfolio
+  bought 13 SPY at 15:50 and holds overnight (the first overnight position in the system). Options gates
+  closed on SPY and QQQ (implied minus realised volatility 2.0 to 2.7 points, threshold 3). Ledgers written
+  for all ten slots; four check-in reports.
+- **Stall.** The bot froze for seven minutes at 14:09 ET inside a network call and recovered on its own.
+  Cause: alpaca-py sends requests without a timeout. Fixed: every Alpaca client now carries connect and
+  read timeouts (10 s / 30 s).
+- **Empty universe.** The 08:43 universe build failed on a dropped connection; the intraday slots picked
+  up the 30-minute rebuild, the momentum portfolio did not and decided on an empty universe at 15:50.
+  Fixed: portfolio universes follow every rebuild and a decision retries the build if the universe is empty.
+
 ## 2026-09-24 (morning) — Options backtest: the first family that holds up on risk
 
 **Completed**

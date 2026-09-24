@@ -236,6 +236,8 @@ class BotRunner:
                     self._rebuild_universe()
                     for sl in self.slots:
                         sl.symbols = self._symbols_for(sl.strategy)
+                    for ps in self.portfolios:
+                        ps.universe = self._portfolio_universe(ps.spec)
                     last_universe_refresh = time.monotonic()
             except Exception as e:  # noqa: BLE001
                 logger.exception("tick failed: {}", e)
@@ -375,6 +377,14 @@ class BotRunner:
     def _decide_portfolio(self, ps: DailySlot, now: datetime, today: str) -> None:
         from datetime import date as _date
 
+        if not ps.universe:  # e.g. the universe build failed at start-up (2026-09-24): try once more now
+            if not self.universe:
+                self._rebuild_universe()
+            ps.universe = self._portfolio_universe(ps.spec)
+            if not ps.universe:
+                logger.warning("[{}] universe is empty; decision skipped today", ps.spec.id)
+                ps.decided_on = today
+                return
         symbols = self._portfolio_symbols(ps)
         d = _date.fromisoformat(today)
         s_utc = datetime.combine(d - timedelta(days=600), datetime.min.time(), timezone.utc)
