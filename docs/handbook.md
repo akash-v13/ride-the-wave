@@ -1,4 +1,4 @@
-<!-- Exported from the shareable Claude doc "Ride The Wave Handbook" (last export 2026-09-23 night). Edit the doc and re-export, or edit here and mirror the change; keep the two in step. -->
+<!-- Exported from the shareable Claude doc "Ride The Wave Handbook" (last export 2026-09-23 night, after 4.11). Edit the doc and re-export, or edit here and mirror the change; keep the two in step. -->
 
 # Ride The Wave Handbook
 
@@ -228,6 +228,18 @@ s_i = -\left(r^{on}_i - \frac{1}{N}\sum_{j=1}^{N} r^{on}_j\right), \qquad r^{on}
 **Example.** Residual momentum on TraderPro's 20 mega caps, 2019 to July 2026: each day regress each stock's daily returns on SPY's over 126 days, sum the residuals except the last 10 days, buy the top 30% equal-weight at the next open. CAGR 37.9%, Sharpe 1.43, drawdown −32%. Holding the same 20 names equal-weight: 28.7% and 1.37. TraderPro had recorded 26.1% for the same rule because its Alpaca history was unadjusted and every split looked like a crash.
 
 **Evidence** (docs/research/2026-09-23-traderpro-extraction.md). On point-in-time universes (top 50 or 100 of a 254-stock pool by trailing dollar volume, 2017 to 2026) no stock ranking beats holding its own universe: momentum's information ratio against the universe is 0.0 to 0.2, mean reversion, low volatility and multifactor are worse than the universe, and every long-short construction is flat or negative after 5 bp a side. ETF and index rules do not beat SPY on return; volatility targeting and the 200-day rule keep SPY's Sharpe with half its drawdown. The universe of heavily traded names earned 27% a year on its own, which is survivorship, not a strategy. Conclusion: the profit factors TraderPro showed were the hindsight universe measured without a benchmark. What is worth carrying forward is the infrastructure and the risk-control rules. The daily portfolio slot now exists (feature 21): a \`portfolios:\` entry names a daily strategy, a universe and a capital share; at 15:50 ET the bot fetches adjusted history, asks for target weights, fills whole-share deltas at the current price plus slippage, holds overnight across restarts and may go short; shadow only, nothing reaches Alpaca. From 24 September two observation portfolios run this way: 12-1 momentum on the 20 mega caps and volatility targeting on SPY.
+
+### 4.11 Option structures (shadow)
+
+**Idea** (Chapter 2 of *151 Trading Strategies*, engine from TraderPro). The 57 option structures, from covered calls and verticals to calendars, straddles, butterflies, condors and seagulls, are data: a list of legs, each an instrument (call, put or stock), a side, a ratio, a strike rule (at the money, n steps out or in, same strike as another leg) and an expiry bucket (near or far). A resolver turns a template into concrete contracts against a live chain snapshot: the expiry nearest the target days-to-expiry, the strikes nearest each rule with one step equal to 1% of the spot, only two-sided quotes with a sane spread, the package priced at mid, and for defined-risk single-expiry structures the exact max profit and max loss from the terminal payoff. Units are sized so the max loss (or the debit) is 20% of the slot's capital; exits in order: within 7 days of expiry, 50% of max profit earned, or a loss of twice the baseline. An optional gate enters only when at-the-money implied volatility exceeds 20-day realised volatility by a threshold (the volatility risk premium, §7.4). Alpaca provisions verified 23 September: the paper account is at options level 3 and the data plan serves real-time OPRA chains with greeks and implied volatility.
+
+```latex
+V = \sum_{\text{legs}} (\pm 1)\, m_i\, r_i \quad (+ \text{buy}, - \text{sell}), \qquad \text{P\&L per unit} = \text{entry net} + V_{now}, \qquad \text{dollar P\&L} = 100 \cdot q \cdot (\text{entry net} + V_{now})
+```
+
+**Example.** Long iron condor on SPY at 710, capital $20,000: buy the 682 put, sell the 696 put, sell the 724 call, buy the 738 call, 35 days out, credit $2.10 per share, max loss $11.90; 20% of capital allows 3 units (max loss $3,570). Nine days later the package costs $1.00 to close: P&L $1.10 per share is 52% of the max, so the profit-target rule closes it for +$330 before spreads.
+
+**Status.** Three observation slots run in shadow from 24 September, deciding at 15:40 ET with legs filled against live OPRA quotes at a quarter of the half-spread: an iron condor on SPY gated on the volatility risk premium, a bull put spread on QQQ, a covered call on AAPL. Live placement as one multi-leg order on the paper account exists but stays off until fills are reconciled. No backtester yet: Alpaca's historical option bars make a chain-reconstruction replay possible and it is the next research step. Feature 22; verified API facts in docs/api/options.md.
 
 ## 5. Research protocol: how a strategy earns its place
 

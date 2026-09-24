@@ -37,6 +37,7 @@ class Database:
         self.backtests = repos.BacktestRepo(self.conn)
         self.features = repos.FeatureRepo(self.conn)
         self.control = repos.ControlRepo(self.conn)
+        self.structures = repos.StructureRepo(self.conn)
 
     def _migrate(self) -> None:
         """Bring a pre-multi-strategy database up to date. Idempotent."""
@@ -101,6 +102,7 @@ class Database:
         db.backtests = repos.BacktestRepo(db.conn)
         db.features = repos.FeatureRepo(db.conn)
         db.control = repos.ControlRepo(db.conn)
+        db.structures = repos.StructureRepo(db.conn)
         return db
 
     def close(self) -> None:

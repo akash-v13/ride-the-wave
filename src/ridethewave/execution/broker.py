@@ -206,3 +206,59 @@ class AlpacaBroker(Broker):
         except Exception as e:  # noqa: BLE001
             logger.warning("close_position {} failed: {}", symbol, e)
             return None
+
+    # ---------- option structures (feature 22) ----------
+    def submit_structure(self, legs: list[dict], qty: int) -> str:
+        """Place a resolved structure on the paper account. ``legs``: [{symbol, instrument, side, ratio}].
+        Stock legs go first as separate market orders (Alpaca's multi-leg order is options only, at most
+        four legs, no naked short legs at level 3); the option legs go as one MLEG market order. Returns
+        the last broker order id. Verified request shape 2026-09-23, docs/api/options.md."""
+        from alpaca.trading.requests import OptionLegRequest
+
+        stock_legs = [x for x in legs if x["instrument"] == "stock"]
+        option_legs = [x for x in legs if x["instrument"] != "stock"]
+        last_id = ""
+        for leg in stock_legs:
+            o = self._retry(
+                self.client.submit_order,
+                MarketOrderRequest(
+                    symbol=leg["symbol"],
+                    qty=leg["ratio"] * qty,
+                    side=OrderSide.BUY if leg["side"] == "buy" else OrderSide.SELL,
+                    time_in_force=TimeInForce.DAY,
+                ),
+            )
+            last_id = str(o.id)
+            logger.info("structure stock leg {} {} x{} id={}", leg["side"], leg["symbol"], leg["ratio"] * qty, o.id)
+        if len(option_legs) == 1:
+            leg = option_legs[0]
+            o = self._retry(
+                self.client.submit_order,
+                MarketOrderRequest(
+                    symbol=leg["symbol"],
+                    qty=leg["ratio"] * qty,
+                    side=OrderSide.BUY if leg["side"] == "buy" else OrderSide.SELL,
+                    time_in_force=TimeInForce.DAY,
+                ),
+            )
+            last_id = str(o.id)
+        elif option_legs:
+            o = self._retry(
+                self.client.submit_order,
+                MarketOrderRequest(
+                    qty=qty,
+                    order_class=OrderClass.MLEG,
+                    time_in_force=TimeInForce.DAY,
+                    legs=[
+                        OptionLegRequest(
+                            symbol=leg["symbol"],
+                            ratio_qty=leg["ratio"],
+                            side=OrderSide.BUY if leg["side"] == "buy" else OrderSide.SELL,
+                        )
+                        for leg in option_legs
+                    ],
+                ),
+            )
+            last_id = str(o.id)
+            logger.info("MLEG order {}: {} option legs x{}", o.id, len(option_legs), qty)
+        return last_id

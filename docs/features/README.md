@@ -23,3 +23,4 @@ One page per feature, in plain English: what it does, how to use it, which setti
 19. [Cross-sectional day trades from 151 Trading Strategies (shadow)](19-cross-sectional-daytrade.md)
 20. [Daily portfolio engine (research)](20-daily-portfolio-engine.md)
 21. [Daily portfolio slots (overnight, long or short; shadow)](21-daily-portfolio-slot.md)
+22. [Options engine and options slots (shadow)](22-options-engine.md)

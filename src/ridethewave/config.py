@@ -185,6 +185,42 @@ class PortfolioSpec(_Strict):
     params: dict = Field(default_factory=dict)
 
 
+class OptionsSpec(_Strict):
+    """One entry under ``options:``: one structure template on one underlying, at most one open at a time,
+    decided once a day at ``decision_time`` ET (feature 22). ``shadow`` fills legs against live quotes and
+    keeps everything in our own books; ``live`` places multi-leg orders on the paper account and is only
+    allowed for templates Alpaca level 3 accepts (no naked short legs)."""
+
+    id: str
+    template: str  # ridethewave.options.structures.TEMPLATES key, e.g. long_iron_condor
+    underlying: str = "SPY"
+    enabled: bool = True
+    mode: Literal["shadow", "live"] = "shadow"
+    weight: float = Field(1.0, ge=0)  # capital = base_allocation * weight
+    dte_target: int = Field(35, ge=7, le=120)
+    far_dte_offset: int = Field(30, ge=7, le=120)
+    profit_target_pct: float = Field(0.5, gt=0, le=1.0)  # of max profit, when defined
+    stop_mult: float = Field(2.0, gt=0, le=10.0)  # loss of this many times the baseline (max profit or entry net)
+    close_dte: int = Field(7, ge=0, le=30)
+    risk_fraction: float = Field(0.2, gt=0, le=1.0)  # of capital per structure
+    max_risk_pct: float = Field(0.6, gt=0, le=1.0)
+    entry_gate: Literal["none", "vrp"] = "none"  # vrp: enter only when ATM implied vol - 20d realised vol >= threshold
+    vrp_threshold: float = Field(0.03, ge=0)
+    decision_time: time = time(15, 40)
+    spread_fraction: float = Field(0.25, ge=0, le=1)  # shadow fills pay this fraction of the half-spread per leg
+
+    @model_validator(mode="after")
+    def _template_known_and_placeable(self) -> OptionsSpec:
+        from ridethewave.options.structures import TEMPLATES
+
+        t = TEMPLATES.get(self.template)
+        if t is None:
+            raise ValueError(f"unknown option template {self.template!r}; known: {sorted(TEMPLATES)}")
+        if self.mode == "live" and not t.alpaca_placeable:
+            raise ValueError(f"{self.template} has a naked short leg: Alpaca rejects it, shadow only")
+        return self
+
+
 class RiskSettings(_Strict):
     """Kill switches the bot applies to itself. See docs/features/14-operator.md."""
 
@@ -232,10 +268,11 @@ class Settings(_Strict):
     )
 
     portfolios: list[PortfolioSpec] = Field(default_factory=list)
+    options: list[OptionsSpec] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _strategy_ids_unique(self) -> Settings:
-        ids = [x.id for x in self.strategies] + [x.id for x in self.portfolios]
+        ids = [x.id for x in self.strategies] + [x.id for x in self.portfolios] + [x.id for x in self.options]
         if len(ids) != len(set(ids)):
             raise ValueError(f"duplicate strategy ids: {ids}")
         if not any(x.enabled for x in self.strategies):

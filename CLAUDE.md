@@ -35,6 +35,7 @@ The owner's full brief is in [outline.md](outline.md). The owner is comfortable 
 | 24. TraderPro (owner's July 2026 platform) inventoried and extracted | Done 2026-09-23 | docs/research/2026-09-23-traderpro-extraction.md. Its 2019-26 results replicated on adjusted data with benchmarks: the returns were the hindsight mega-cap universe, not the rules; on point-in-time universes no daily stock ranking beats holding its universe and every long-short version is flat or negative. Regime classifier ported (`daily/regime.py`) |
 | 25. Daily portfolio research engine | Done 2026-09-23 | `src/ridethewave/daily/` (feature 20): 13 book strategies on adjusted daily bars (`sip-day-adj`, ten years, 320-name pool cached), next-open fills, shorts, benchmark + equal-weight curves, IR, halves, point-in-time universes. `scripts/download_daily.py`, `scripts/run_daily_backtest.py`. Not wired to live execution (needs the daily slot with shorts and overnight holds) |
 | 26. Daily portfolio slots (overnight holds, long or short) | Built 2026-09-23, shadow only | `portfolios:` in settings; `portfolio/daily_slot.py`; decision at 15:50 ET, simulated fills, positions persist across restarts, ledger per slot. Two observation slots from 2026-09-24: `pm_megacaps` (12-1 momentum) and `vt_spy` (vol targeting). docs/features/21-daily-portfolio-slot.md. Fixed on the way: each intraday slot wiped the whole positions table when persisting |
+| 27. Options engine and options slots | Built 2026-09-23, shadow only | `src/ridethewave/options/` (feature 22): 57 structure templates, Black-Scholes, OPRA chain snapshots, resolver, sizing and exit rules, options slots with shadow fills or live multi-leg orders (paper account is options level 3, verified; docs/api/options.md). Three observation slots from 2026-09-24: `ic_spy` (iron condor, VRP gate), `bps_qqq` (bull put spread), `cc_aapl` (covered call). No backtester yet |
 | 22. TypeScript API + web UI | Done 2026-09-23 | `web/`: Fastify on Node 26, reads SQLite, control requests queued for the bot; launchd agent `com.ridethewave.api`, http://127.0.0.1:8787. 3 vitest + 70 pytest pass. Pause/resume/flatten take effect from the first bot start after 2026-09-23. docs/features/18-typescript-api.md |
 | 21. Next engine experiments | Planned | Short selling and overnight holds on the **paper account** (the shadow daily slot exists; promote after observation); a survivorship-free pool before trusting any long-only ranking; regime classifier as a gate; ORB on a broader universe with a catalyst flag; the book's dollar-neutral strategies as daily slots |
 | 17. Operator: kill switches, check-in reports, alerts, launchd schedule | Done 2026-09-21 | docs/features/14-operator.md. Installed with `scripts/install_launchd.py install` |
@@ -44,7 +45,7 @@ The owner's full brief is in [outline.md](outline.md). The owner is comfortable 
 ## Key decisions (details in docs/decisions.md)
 
 - **Python 3.12 + uv**, single package `ridethewave` under `src/`. No Docker. Node 26 is used only for the `web/` API layer.
-- **alpaca-py 0.44.x** is the only broker/data SDK. Paper endpoint always; live is a config flag that stays off.
+- **alpaca-py 0.44.x** is the only broker/data SDK. Paper endpoint always; live is a config flag that stays off. Options: the paper account is level 3 and the data plan serves OPRA chains with greeks (verified 2026-09-23); option structures run through `options:` slots, shadow first.
 - **Data plan: Algo Trader Plus since 2026-09-21** ($99/mo): all US exchanges (SIP) in real time, no history hold-back, unlimited websocket symbols, 10,000 REST calls/min. `config/settings.yaml` (gitignored, this machine) sets `data_feed: sip`; the committed example keeps `iex` as the safe default for a Basic account. Code written for the free tier (snapshot polling, one call per 200 symbols) still works and is now far from any limit; websocket streaming is unblocked.
 - **REST snapshot polling, not websockets, for v1.** One multi-symbol snapshot call per poll covers the whole universe. Websockets come later for held positions.
 - **Same strategy code runs live and in backtest.** The strategy only sees `Bar` and `Position` objects and emits `Signal`s. Only the data source and broker are swapped.
@@ -76,6 +77,7 @@ src/ridethewave/        the Python package
   storage/              SQLite schema and repositories
   ui/                   Streamlit dashboard
   daily/                daily-bar portfolio strategies, research engine, regime classifier (feature 20)
+  options/              the 57 option structures, chain data, resolver, lifecycle, options slots (feature 22)
 scripts/                entry points: run_bot, run_backtest, run_ui
 tests/                  pytest suites
 data/                   runtime files (SQLite db, caches). Gitignored.
@@ -92,7 +94,7 @@ uv run python scripts/report.py close                    # a check-in page -> da
 uv run python scripts/install_launchd.py status          # scheduled agents: bot + operator tick (install | remove)
 uv run python scripts/operator_tick.py                   # what the 5-minute tick does (health check, due tasks)
 uv run python scripts/run_daily_backtest.py --strategy price_momentum --universe mega_caps_20 --start 2019-01-01 --end 2026-07-24
-uv run pytest -q                                         # 82 tests
+uv run pytest -q                                         # 91 tests
 uv run ruff check src scripts tests && uv run ruff format --check src scripts tests
 ```
 

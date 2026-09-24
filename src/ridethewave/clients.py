@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.historical.option import OptionHistoricalDataClient
 from alpaca.data.historical.screener import ScreenerClient
 from alpaca.trading.client import TradingClient
 
@@ -18,6 +19,7 @@ class AlpacaClients:
     trading: TradingClient
     data: StockHistoricalDataClient
     screener: ScreenerClient
+    options: OptionHistoricalDataClient
 
 
 def make_clients(secrets: Secrets, settings: Settings) -> AlpacaClients:
@@ -31,4 +33,5 @@ def make_clients(secrets: Secrets, settings: Settings) -> AlpacaClients:
         raise RuntimeError(f"TradingClient base URL is not the paper host: {base}")
     data = StockHistoricalDataClient(secrets.alpaca_api_key, secrets.alpaca_secret_key)
     screener = ScreenerClient(secrets.alpaca_api_key, secrets.alpaca_secret_key)
-    return AlpacaClients(trading=trading, data=data, screener=screener)
+    options = OptionHistoricalDataClient(secrets.alpaca_api_key, secrets.alpaca_secret_key)
+    return AlpacaClients(trading=trading, data=data, screener=screener, options=options)

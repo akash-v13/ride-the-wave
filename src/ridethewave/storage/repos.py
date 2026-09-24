@@ -512,3 +512,39 @@ class ControlRepo(_Repo):
 
     def recent(self, limit: int = 20) -> list[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM control_requests ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
+class StructureRepo(_Repo):
+    """Option structures (feature 22). Rows are plain dicts; ridethewave.options.lifecycle turns them into objects."""
+
+    def insert(self, row: dict) -> None:
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO structures (id, strategy, run_id, mode, template_id, underlying, qty, legs_json,
+                     entry_net, max_profit, max_loss, status, opened_at, closed_at, exit_net, realized_pl,
+                     close_reason, broker_order_id)
+                   VALUES (:id, :strategy, :run_id, :mode, :template_id, :underlying, :qty, :legs_json,
+                     :entry_net, :max_profit, :max_loss, :status, :opened_at, :closed_at, :exit_net, :realized_pl,
+                     :close_reason, :broker_order_id)""",
+                row,
+            )
+
+    def close(self, id: str, closed_at: str, exit_net: float | None, realized_pl: float | None, reason: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE structures SET status='closed', closed_at=?, exit_net=?, realized_pl=?, close_reason=? "
+                "WHERE id=?",
+                (closed_at, exit_net, realized_pl, reason, id),
+            )
+
+    def open_for(self, strategy: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM structures WHERE strategy=? AND status='open' ORDER BY opened_at", (strategy,)
+        ).fetchall()
+
+    def recent(self, limit: int = 50, strategy: str | None = None) -> list[sqlite3.Row]:
+        if strategy:
+            return self.conn.execute(
+                "SELECT * FROM structures WHERE strategy=? ORDER BY opened_at DESC LIMIT ?", (strategy, limit)
+            ).fetchall()
+        return self.conn.execute("SELECT * FROM structures ORDER BY opened_at DESC LIMIT ?", (limit,)).fetchall()

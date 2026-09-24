@@ -14,6 +14,23 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-09-23 (night) — Options engine ported and wired to Alpaca's options API
+
+**Completed**
+
+- Verified the upgraded provisions: paper account at options level 3 with $100k options buying
+  power; OPRA real-time chains with quotes, implied volatility and greeks (`docs/api/options.md`).
+- Ported TraderPro's options engine (feature 22): the 57 Chapter-2 structures as leg templates,
+  Black-Scholes and implied volatility, chain snapshots, the resolver, sizing and exit rules, and a
+  new options slot kind (`options:` in settings) that keeps one structure open per underlying and
+  decides at 15:40 ET. Shadow fills against live quotes; live mode places multi-leg orders on the
+  paper account (implemented, not yet exercised).
+- Three observation slots run in shadow from 24 September: an iron condor on SPY gated on the
+  volatility risk premium, a bull put spread on QQQ, a covered call on AAPL.
+
+**Next**: watch the first structures open and close; a chain-reconstruction backtester from Alpaca's
+historical option bars; fill reconciliation before any slot goes live; a structures tab on the web page.
+
 ## 2026-09-23 (evening) — TraderPro extracted; daily portfolio engine built; the book's rankings tested honestly
 
 **Completed**

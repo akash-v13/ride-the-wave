@@ -145,3 +145,26 @@ CREATE TABLE IF NOT EXISTS control_requests (
     result      TEXT,
     handled_at  TEXT
 );
+
+-- Option structures (feature 22): one row per opened multi-leg position, legs as JSON.
+CREATE TABLE IF NOT EXISTS structures (
+    id             TEXT PRIMARY KEY,
+    strategy       TEXT NOT NULL,           -- options slot id
+    run_id         TEXT NOT NULL,
+    mode           TEXT NOT NULL,           -- shadow | live
+    template_id    TEXT NOT NULL,
+    underlying     TEXT NOT NULL,
+    qty            INTEGER NOT NULL,
+    legs_json      TEXT NOT NULL,
+    entry_net      REAL NOT NULL,           -- per unit: +credit / -debit
+    max_profit     REAL,
+    max_loss       REAL,
+    status         TEXT NOT NULL DEFAULT 'open',
+    opened_at      TEXT NOT NULL,
+    closed_at      TEXT,
+    exit_net       REAL,
+    realized_pl    REAL,
+    close_reason   TEXT,
+    broker_order_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_structures_strategy ON structures(strategy, status);
