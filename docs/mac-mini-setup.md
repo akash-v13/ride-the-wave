@@ -30,7 +30,8 @@ laptop. Where it differs from the steps below:
 | Machine | The Mac mini, user `admin`, macOS 27.0.1, Central time | |
 | Project folder | `/Users/admin/Projects/Finance/Ride The Wave` | Not under Desktop: macOS privacy protection covers Desktop, Documents and Downloads, and can block a scheduled job from reading them without showing any prompt |
 | Python | uv 0.13.6 in `~/.local/bin`, installed with uv's own installer | No administrator password needed, so it could be done over SSH |
-| Node | 26.9.0 from nodejs.org, checksum verified, in `~/.local/node`, linked from `~/.local/bin` | Same reason. Homebrew is not installed; nothing needs it. Add it later for `gh` or `poppler` |
+| Node | 26.9.0 from nodejs.org, checksum verified, in `~/.local/node`, linked from `~/.local/bin` | Same reason. Homebrew is not installed; nothing needs it. Add it later for `poppler` |
+| GitHub CLI | `gh` 2.103.3 from GitHub's release page, checksum and Apple notarization checked, in `~/.local/bin`. Signed in on 2026-10-29 with GitHub's device login; the token is in the macOS keychain, and `git` uses it through `gh auth setup-git` | Pull requests are opened from the Mac mini now that the laptop's copy is archived. The login can reach every repository on the account, and the Mac mini logs in by itself, so revoke it at github.com/settings/applications if the machine ever leaves home |
 | Energy, FileVault, login | Already right: sleep off, wake on network, restart after a power failure, FileVault off, automatic login as `admin` | |
 | Claude Code memory | Copied and renamed to `~/.claude/projects/-Users-admin-Projects-Finance-Ride-The-Wave` | The folder name follows the project path |
 | Laptop | Scheduled jobs removed; `.env` renamed to `.env.disabled-moved-to-mac-mini` | Never two bots on one account |
