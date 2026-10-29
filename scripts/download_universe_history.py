@@ -14,12 +14,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
-from alpaca.trading.enums import AssetClass, AssetStatus
-from alpaca.trading.requests import GetAssetsRequest
 from loguru import logger
 
 from ridethewave.clients import make_clients
 from ridethewave.config import load_secrets, load_settings
+from ridethewave.data.assets import fetch_assets
 from ridethewave.data.market_data import DailyBars
 from ridethewave.data.universe import is_fund
 
@@ -38,14 +37,14 @@ def main() -> int:
     clients = make_clients(load_secrets(), settings)
     allowed = {e.upper() for e in settings.universe.exchanges}
     assets = []
-    for status in (AssetStatus.ACTIVE, AssetStatus.INACTIVE):
-        assets += clients.trading.get_all_assets(GetAssetsRequest(status=status, asset_class=AssetClass.US_EQUITY))
+    for status in ("active", "inactive"):
+        assets += fetch_assets(clients.trading, status=status)
     rows = []
     for a in assets:
-        exch = str(getattr(a.exchange, "value", a.exchange)).upper()
+        exch = a.exchange
         if exch not in allowed or not a.symbol.isalpha():
             continue
-        fund = is_fund(getattr(a, "name", None))
+        fund = is_fund(a.name)
         if fund and not args.include_funds:
             continue
         rows.append(
@@ -53,7 +52,7 @@ def main() -> int:
                 "symbol": a.symbol,
                 "name": a.name,
                 "exchange": exch,
-                "status": str(getattr(a.status, "value", a.status)),
+                "status": a.status,
                 "fund": fund,
             }
         )

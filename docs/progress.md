@@ -14,6 +14,146 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-10-29 (evening) — Close report fixed; a backup for the morning start
+
+**The 16:15 close report was out of date.** It ran before the evening fixes, so it showed the QQQ
+covered call at $0.00 and Wave Rider with "1 open, 2 trades". The corrected report is
+`data/reports/2026-10-29/1802-close.md` (no phone push sent). The 16:18 report is kept as it was.
+
+**Report fixes** (from tomorrow's reports):
+
+1. Every trade row names its strategy. CDE appeared twice because two shadow strategies held it.
+   Fixing this exposed that trades and ledger rows read back from the database had lost their
+   strategy and all said `wave_rider`. Nothing that trades used that field, so no money or
+   allocation was affected.
+2. Positions held over several days show their entry date ("15 Oct 16:28"). Before, they looked as
+   if they closed before they opened.
+3. A credit option structure's P/L % had the wrong sign. The +$303.25 bull put spread showed −90%.
+   It now shows +90%. The one stored row and its ledger average were corrected (old value −90.12).
+4. Average hold keeps day trades and overnight holds apart ("day trades 239 min (18); held overnight
+   or longer 19.0 days (6)"). The single figure of 7017 minutes was meaningless.
+5. The close report has a table of every strategy's ledger, the books of record. The one-line summary
+   came from the bot's last tick, so it missed anything corrected after the bot stopped.
+
+**Morning start: confirmed, and now with a backup.** The bot had never yet been started by its
+06:30 ET calendar job on the Mac mini. The system log shows the job fired on time this morning
+(05:30:03 Central). It started nothing, because the bot was already running from last night's
+restart test. As insurance, the watchdog now also starts the bot from 07:00 ET if the morning
+start did not run, and sends a phone alert. Also checked for running unattended: automatic login
+is on, FileVault is off, the Mac never sleeps and restarts after a power cut, 160 GB is free,
+Tailscale connects the Mac mini and the laptop, and macOS will not install updates by itself.
+
+155 tests pass. Details: `docs/features/14-operator.md`, section 4.
+
+## 2026-10-29 — First session on the Mac mini; one execution bug found and fixed
+
+**The session ran cleanly.** The bot started at 09:28 ET with a 62-stock universe on the first try, and
+every 30-minute rebuild succeeded. Ticks were steady with no gaps. Every report and phone push went out,
+and no alerts fired. Live Wave Rider made three trades, GOOG, IOVA and NUWE. All three were stopped out,
+for −$32.93.
+
+**Bug: the bot could try to sell shares the protective stop had already sold.** Alpaca's stop sold NUWE at
+11:27:12 ET. Six seconds later the bot's own exit sent a market sell for the same 151 shares. Alpaca refused
+it only because NUWE cannot be shorted; on a stock that can be, it would have opened a short. The bot also
+kept NUWE as held, and the $15.10 loss was missing from its records. Fixed: the bot now checks the stop
+before selling, books the stop's fill if it got there first, and a live slot never sells more shares than
+Alpaca holds. The missing NUWE trade is recorded. A one-off job removes the leftover NUWE position once
+today's bot exits. Details: `docs/features/07-order-execution.md`.
+
+**Also fixed: the watchdog could not read the boot time** under launchd, because `sysctl` was not on the job's
+PATH. And a correction: after a restart, launchd itself starts the bot again at login, as the 28 October
+restart test showed. The watchdog is a backup, not the only cover.
+
+All fixes are on the Mac mini, with 142 tests passing there. The running session was not touched. The order
+fix applies from the 30 October start, and the watchdog fix from the next five-minute check.
+
+**At the close.** The account was flat at $99,937.81, with no positions or open orders. The NUWE cleanup ran,
+and the live ledger shows −$32.93 on three trades. The shadow `bps_qqq` closed a day before expiry for +$303.25.
+`pm_actives` rebalanced for the first time since 19 October. The day-trade shadow slots closed at 15:55:
+`xs_overnight` −$14.20, `xs_combo` −$50.66, the opening-range breakout −$12.27.
+
+**Bug: the shadow QQQ covered call was booked at $0.00. The real figure was −$1,892.13.** Its short call
+was quoted bid 0 / ask 0.02. The shadow fill rule needed a bid on every leg, and its fallback, the last
+mark, had been lost in last night's restart, so the books took the entry price. Fixed: a close now
+accepts a quote with an ask and no bid. Missing prices fall back to mid, then the saved last mark, then
+exercise value, and the fallback used is logged. Marks now survive restarts. The record was re-priced the
+same evening (database backup `data/ridethewave.db.bak-cc_qqq-20261029163032`). `bps_spy` would have hit
+the same thing at its 5 November close. 146 tests pass on the Mac mini. Details:
+`docs/features/22-options-engine.md`.
+
+## 2026-10-28 (evening) — Moved to the Mac mini
+
+The system now runs on the Mac mini, not the laptop.
+
+| Item | State |
+| --- | --- |
+| Machine | The Mac mini, user `admin` |
+| Project folder | `/Users/admin/Projects/Finance/Ride The Wave` |
+| Checks on the Mac mini | Connection check all passed, 136 + 3 tests, dry run with a 61-stock universe, test push delivered |
+| Scheduled jobs | Installed; the bot is waiting for the open on 29 October |
+| Laptop | Scheduled jobs removed; keys file renamed, so it cannot trade |
+
+**Before you travel:** install Tailscale on the Mac mini and the laptop, signed in to the same account,
+and turn off key expiry for the Mac mini. Then from anywhere: `ssh admin@<the Mac mini's Tailscale name>`.
+Subscribe to the ntfy topic on your phone. The name is in `.env` on the Mac mini, and it was given in the
+session.
+
+**First thing to check on 29 October:** the 09:00 pre-market push, then that the universe has stocks and
+the log has no gaps after the close.
+
+## 2026-10-28 — A month of mostly empty sessions, found and fixed
+
+**What happened between 25 September and 28 October.** The bot started on all 24 trading days. Only 30
+September and 5 October ran a full session with stocks to scan. Two causes:
+
+- **The Mac was asleep.** The power log shows the laptop on battery and asleep through most market hours.
+  It woke for a few seconds at a time for macOS maintenance. The bot's `caffeinate` assertion cannot stop
+  sleep on battery or with the lid closed. No wake schedule is set. Each time the Mac woke, the first call
+  to Alpaca failed on a dead connection, and on most days that call was the universe build.
+- **A new exchange broke the asset list.** From 20 October Alpaca listed ten stocks on the Texas Stock
+  Exchange (`TXSE`). alpaca-py rejects that code and drops the entire list, so every universe build failed
+  from 20 to 28 October. The intraday strategies had nothing to scan, and the momentum portfolio skipped
+  its decisions. The health check said "healthy" throughout.
+
+**Results over the month.** These cannot be used to judge any strategy, because most sessions were empty.
+
+| Slot | Mode | Result to 28 Oct |
+| --- | --- | --- |
+| Wave Rider | live | 8 trades, 2 wins, −$19.68; paper account $99,970.74 |
+| pm_actives (momentum) | shadow | $9,338 from $10,000; frozen since 19 Oct |
+| vt_spy (volatility targeting) | shadow | $10,022 |
+| bps_qqq, bps_spy (bull put spreads) | shadow | +$294 and +$174 open |
+| cc_qqq (covered call) | shadow | −$1,284 open, mostly the QQQ shares |
+
+**Fixed today** (106 tests pass; a dry run against the paper account built a 61-stock universe and ran every slot):
+
+1. The asset list is read as raw data, so an unknown exchange code can no longer break it (`data/assets.py`).
+2. Every Alpaca call retries a failed or dropped connection. Read-only calls also retry a lost response,
+   and orders are never sent twice.
+3. The start-up universe build gets three attempts. While the universe is empty, the bot retries every 2
+   minutes. Stocks that arrive late get their history.
+4. New alerts: an empty universe, and a portfolio or options decision that was skipped.
+5. The report's positions table now shows which strategy holds each position. The column was missing.
+
+**Needed from you.** Keep the Mac on power and awake from before the open until after the close on
+weekdays. Set the wake schedule once: `sudo pmset repeat wakeorpoweron MTWRF 08:05:00`. If the lid has to
+stay closed, `sudo pmset -a disablesleep 1` keeps the Mac awake, but it then never sleeps. An always-on
+machine, such as a Mac mini or a small cloud server, would remove the problem for good.
+
+**Decided: a Mac mini becomes the always-on machine.** Setup and handover steps, including remote
+access from anywhere through Tailscale, are in `docs/mac-mini-setup.md`. Until it arrives, keep the laptop
+plugged in and awake in market hours. Built the same evening: phone alerts through the free ntfy app.
+Every alert, plus a short push when each check-in report is ready, reaches your phone. The machine is a Mac mini M1 (2020) with 8 GB and 256 GB.
+That is enough: about 7 GB at peak with research running, and the database grows about 1 GB a year. It
+needs macOS 15 or later for Homebrew. Also built: a watchdog that restarts the bot if the Mac restarts
+during market hours (corrected the next day: launchd already restarts it at login, so the watchdog is a backup). A bot you stop by hand stays
+stopped. 136 tests pass.
+
+**Also noticed, not changed.** The SPY bull put spread opened on a weekly expiry (6 November). The
+backtest only tested monthly expiries, so this slot is not running exactly what was tested. The two QQQ
+positions expire on 30 October. Their close rule runs on the 29th at 15:40 ET, but only if the Mac is
+awake.
+
 ## 2026-09-24 (session review) — First live trade; two operational fixes
 
 - **Session.** Wave Rider's first live trade: 30 SRZN at $32.48 at 10:42 ET, stopped out a minute later at

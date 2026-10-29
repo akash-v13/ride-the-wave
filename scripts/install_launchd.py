@@ -5,8 +5,10 @@
     uv run python scripts/install_launchd.py status
 
 Schedule:
-  06:30 system time weekdays   run_bot.py    (waits for the open; exits at the close; restarted only on crash;
-                                              also started once at load, where it waits for the next open)
+  06:30 ET weekdays            run_bot.py    (written in system time; waits for the open; exits at the close;
+                                              relaunched by launchd after a crash, and by the operator tick's
+                                              watchdog after a reboot in trading hours or when the morning
+                                              start did not run; not started at load)
   always (KeepAlive)           web/dist/server.js: the TypeScript API and web UI on http://127.0.0.1:8787
   every 5 min                  operator_tick.py: health check, then any due task by Eastern time:
                                reports 09:00 / 11:30 / 14:00 / 16:15 / 21:00 ET, nightly 20:30 ET
@@ -18,11 +20,14 @@ from __future__ import annotations
 
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from ridethewave.operator.watchdog import SCHEDULED_START  # one source for the 06:30 ET start the watchdog checks
 
 PROJECT = Path(__file__).resolve().parents[1]
 AGENTS = Path.home() / "Library" / "LaunchAgents"
@@ -96,16 +101,37 @@ def agents() -> dict[str, dict]:
     # (observed: launchd kept its boot-time timezone, two hours behind the system setting). Everything else runs
     # from one interval job that checks Eastern time itself (operator_tick.py).
     out = {
-        "bot": _plist("bot", ["scripts/run_bot.py"], calendar=cal(6, 30), keepalive_on_crash=True),
+        "bot": _plist(
+            "bot",
+            ["scripts/run_bot.py"],
+            calendar=cal(SCHEDULED_START.hour, SCHEDULED_START.minute),
+            keepalive_on_crash=True,
+        ),
         "operator": _plist("operator", ["scripts/operator_tick.py"], interval=300),
         "api": _api_plist(),
     }
     return out
 
 
+def _node() -> str:
+    """Absolute path to node. launchd's PATH is minimal, so a bare "node" only works if it sits in one of the
+    PATH directories below. Homebrew's locations first, then wherever the installing shell finds node (nvm, fnm,
+    the official installer), then ~/.local/bin; the bare name only as a last resort."""
+    for cand in ("/opt/homebrew/bin/node", "/usr/local/bin/node"):
+        if Path(cand).exists():
+            return cand
+    found = shutil.which("node")
+    if found:
+        return os.path.abspath(found)  # not resolved: version managers point a stable symlink at the current version
+    local = Path.home() / ".local" / "bin" / "node"
+    if local.exists():
+        return str(local)
+    return "node"
+
+
 def _api_plist() -> dict:
     """The TypeScript API + web UI (web/), kept alive always; serves http://127.0.0.1:8787."""
-    node = next((c for c in ("/opt/homebrew/bin/node", "/usr/local/bin/node") if Path(c).exists()), "node")
+    node = _node()
     return {
         "Label": f"{LABEL}.api",
         "ProgramArguments": [node, str(PROJECT / "web" / "dist" / "server.js")],

@@ -105,3 +105,91 @@ def test_reconcile_adopts_broker_positions():
     assert p.peak_price == 205.0 and p.entry_price == 200.0
     book.reconcile([], T0)
     assert book.positions == {}
+
+
+# ---- the 2026-10-29 NUWE race: the protective stop sold before the bot's own exit fired ----
+def _held_position(m, broker, book, sym="AAPL"):
+    m.handle([buy(sym)], T0)
+    o = broker.orders[book.pending_entries[sym].order_id]
+    broker.fill(o.id, 100.0)
+    m.poll(T0)
+    return o.legs[0].id  # the protective stop
+
+
+def _sell(sym="AAPL"):
+    return Signal(SignalType.SELL, sym, T0, "hard_stop | -1.0%", 99.0, 9)
+
+
+def _market_sells(broker):
+    return [o for o in broker.orders.values() if o.side == "sell" and o.type == "market"]
+
+
+def test_stop_already_filled_is_booked_and_nothing_is_sold(om, db):
+    m, broker, book = om
+    stop_id = _held_position(m, broker, book)
+    broker.fill(stop_id, 98.9, at=T0 + timedelta(minutes=5))  # the stop fills before the bot polls
+    m.handle([_sell()], T0 + timedelta(minutes=5, seconds=6))
+    assert _market_sells(broker) == []  # a market sell here would have opened a short
+    assert "AAPL" not in book.positions
+    trade = db.trades.for_run("t")[0]
+    assert (
+        trade.exit_reason == "server_stop"
+        and trade.exit_price == pytest.approx(98.9)
+        and trade.exit_order_id == stop_id
+    )
+    assert db.positions.all("wave_rider") == []
+    done = m.poll(T0 + timedelta(minutes=6))  # the next poll hands the trade to the engine (heartbeat, risk, ledger)
+    assert [t.exit_reason for t in done] == ["server_stop"] and done[0].pnl == pytest.approx(-9.9)
+    assert m.poll(T0 + timedelta(minutes=7)) == []  # handed out once
+
+
+def test_partly_filled_stop_sells_only_the_rest(om):
+    m, broker, book = om
+    stop_id = _held_position(m, broker, book)
+    stop = broker.orders[stop_id]
+    stop.status, stop.filled_qty, stop.filled_avg_price = "partially_filled", 4, 98.9
+    m.handle([_sell()], T0 + timedelta(minutes=5))
+    sells = _market_sells(broker)
+    assert len(sells) == 1 and sells[0].qty == 5
+
+
+def test_pending_cancel_waits_for_the_final_state(om, db):
+    m, broker, book = om
+    stop_id = _held_position(m, broker, book)
+    stop = broker.orders[stop_id]
+    real_get, reads = broker.get_order, []
+
+    def get_order(oid):
+        if oid == stop_id:
+            reads.append(oid)
+            if len(reads) == 1:
+                stop.status = "pending_cancel"  # Alpaca has the cancel request, the stop has not settled yet
+            else:
+                stop.status, stop.filled_qty, stop.filled_avg_price = "filled", 9, 98.8  # it filled after all
+        return real_get(oid)
+
+    broker.get_order = get_order
+    broker.cancel = lambda oid: broker.cancelled.append(oid)
+    m._sleep = lambda s: None
+    m.handle([_sell()], T0 + timedelta(minutes=5))
+    assert len(reads) == 2 and _market_sells(broker) == []
+    assert db.trades.for_run("t")[0].exit_price == pytest.approx(98.8)
+
+
+def test_live_slot_never_sells_more_than_the_broker_holds(om, db):
+    m, broker, book = om
+    m.verify_holdings = True
+    _held_position(m, broker, book, "AAPL")
+    _held_position(m, broker, book, "MSFT")
+    broker._positions = [BrokerPosition("MSFT", 5, 100.0, 99.0)]  # AAPL: none at the broker; MSFT: 5 of 9
+    m.handle([_sell("AAPL"), _sell("MSFT")], T0 + timedelta(minutes=5))
+    sells = {o.symbol: o.qty for o in _market_sells(broker)}
+    assert sells == {"MSFT": 5}  # nothing sold for AAPL: that would have been a short
+    assert "AAPL" not in book.positions and all(r.symbol != "AAPL" for r in db.positions.all("wave_rider"))
+
+
+def test_holdings_are_not_checked_unless_asked(om):
+    m, broker, book = om  # shadow and backtest brokers simulate holdings; the check is for live slots only
+    _held_position(m, broker, book)
+    m.handle([_sell()], T0 + timedelta(minutes=5))
+    assert len(_market_sells(broker)) == 1

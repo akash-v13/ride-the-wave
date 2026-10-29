@@ -29,6 +29,19 @@ database; nothing reaches Alpaca. In live mode the same legs go to the paper acc
 multi-leg market order (stock legs first); the config refuses live for the 17 templates with a
 naked short leg. All three configured slots run in shadow.
 
+**Pricing a close (since 2026-10-29).** Opening needs a bid and an ask on every option leg. A close
+also accepts an option quoted with an ask and no bid, which is normal for a far out-of-the-money
+option a day before expiry (bid 0, ask 0.02): buying it back pays the ask, and selling it gets
+nothing. If a close still has no fill price, the books take, in order: the mid of whatever quotes
+exist; the structure's last mark; the options' exercise value at the current spot. They use the entry
+value (P&L zero) only if all three are missing, and log that as an error. Any fallback is logged and
+written into the close reason (`... | priced from the last mark`). Each structure's last mark is now
+saved with the slot's cash, so a restart no longer loses it. Why: on 29 October the shadow QQQ covered
+call closed with its short call at bid 0 / ask 0.02. The bot had restarted the night before, so no
+mark was held, and the books took the entry value: P&L $0.00 instead of −$1,892.13. That record was
+re-priced the same evening, at QQQ 713.40 (15:40 ET) and the call at 0.02. The backtester's quotes
+always have a bid above zero or none at all, so backtest results do not change.
+
 **Worked example.** `ic_spy`, $20,000 capital, SPY at 710. Puts at 682 and 696, calls at 724 and
 738, 35 days out; credit $2.10 per share, max loss $11.90. 20% of capital is $4,000, so 3 units
 (max loss $3,570). Nine days later the package is worth $1.00 to close: P&L $1.10 per share, 52% of

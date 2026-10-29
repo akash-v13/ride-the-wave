@@ -82,6 +82,8 @@ assets = client.get_all_assets(GetAssetsRequest(status=AssetStatus.ACTIVE, asset
 
 Query params: `status` (`active`), `asset_class` (`us_equity`), `exchange` (`NYSE`, `NASDAQ`, `ARCA`, ...), `attributes`.
 
+**Do not use `get_all_assets` in this project (2026-10-28).** alpaca-py validates `exchange` against a fixed list of codes: AMEX, ARCA, ASCX, BATS, NYSE, NASDAQ, NYSEARCA, FTXU, CBSE, GNSS, ERSX, OTC, CRYPTO. Since 2026-10-20 the endpoint also returns `TXSE`, the Texas Stock Exchange, for 10 symbols (IBOC, ILS, OBK, CECO, PWRX, TXS, ICOM, WTAL, THRU, FIFT). alpaca-py 0.44.0 is still the latest release, and it raises a validation error for the whole list. Use `ridethewave.data.assets.fetch_assets(client)` instead. It calls `client.get("/assets", params)`, which returns the raw JSON, and parses it leniently. The same strict check exists on `Position.exchange`; our exchange filter keeps TXSE stocks out of the universe, so the bot never holds one. The raw row's asset-class field is named `class`, not `asset_class`.
+
 Sample response (one element of the array):
 
 ```json

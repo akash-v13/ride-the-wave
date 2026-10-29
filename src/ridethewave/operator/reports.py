@@ -63,6 +63,18 @@ def check_alerts(
             age = (now - hb_ts).total_seconds()
             if age > settings.operator.heartbeat_stale_seconds and not (hb and hb.get("waiting_for")):
                 alerts.append(f"heartbeat stale: {age / 60:.1f} min since last tick")
+    # Problems the bot recorded in today's heartbeat. Checked in and after market hours so the close report
+    # still shows them. Added 2026-10-28: for six sessions the universe build failed and every check said
+    # "healthy", because nothing looked at the universe size or at decisions that were skipped.
+    today = et.strftime("%Y-%m-%d")
+    if hb and hb_ts is not None and hb_ts.astimezone(ET).strftime("%Y-%m-%d") == today and not hb.get("waiting_for"):
+        if hb.get("universe") == 0:
+            alerts.append("universe empty: the intraday strategies have no symbols to trade")
+        for group in ("portfolios", "options"):
+            for sid, snap in (hb.get(group) or {}).items():
+                skipped = (snap or {}).get("skipped") or {}
+                if skipped.get("day") == today:
+                    alerts.append(f"decision skipped [{sid}]: {skipped.get('reason', 'unknown')}")
     risk, _ = _state(db, "risk")
     if risk and risk.get("halted"):
         alerts.append(f"risk halt active: {risk['halted']}")
@@ -85,22 +97,63 @@ def _positions_table(db: Database) -> str:
         pct = (r["last_price"] / r["entry_price"] - 1) * 100 if r["entry_price"] else 0
         trig = f"{r['exit_trigger']:.2f}" if r["exit_trigger"] else "not armed"
         out.append(
-            f"| {r['symbol']} | {r['qty']:.0f} | {r['entry_price']:.2f} | {r['last_price']:.2f} | "
+            f"| {r['strategy']} | {r['symbol']} | {r['qty']:.0f} | {r['entry_price']:.2f} | {r['last_price']:.2f} | "
             f"{r['peak_price']:.2f} | {trig} | {pnl:+.2f} | {pct:+.2f}% |"
         )
     return "\n".join(out) + "\n"
 
 
-def _trades_table(trades) -> str:
+def _when(dt: datetime, day: str) -> str:
+    """Clock time for the report's day; date and time for anything earlier. Positions held for days (portfolio and
+    options slots) otherwise looked as if they closed before they opened (in 16:28, out 15:50)."""
+    et = dt.astimezone(ET)
+    return f"{et:%H:%M}" if et.strftime("%Y-%m-%d") == day else f"{et:%d %b %H:%M}"
+
+
+def _trades_table(trades, day: str) -> str:
     if not trades:
         return "No closed trades.\n"
-    out = ["| Symbol | In | Out | Entry | Exit | P/L | P/L % | Why |", "|---|---|---|---|---|---|---|---|"]
+    out = [
+        "| Strategy | Symbol | In | Out | Entry | Exit | P/L | P/L % | Why |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
     for t in trades:
         out.append(
-            f"| {t.symbol} | {t.entry_time.astimezone(ET):%H:%M} | {t.exit_time.astimezone(ET):%H:%M} | "
+            f"| {t.strategy} | {t.symbol} | {_when(t.entry_time, day)} | {_when(t.exit_time, day)} | "
             f"{t.entry_price:.2f} | {t.exit_price:.2f} | {t.pnl:+.2f} | {t.pnl_pct:+.2f}% | {t.exit_reason} |"
         )
     return "\n".join(out) + "\n"
+
+
+def _ledger_table(ledgers) -> str:
+    """One row per strategy from the ledgers written at shutdown. They are the books of record: the heartbeat is the
+    bot's last tick, so it misses anything corrected after the bot exits (the NUWE stop fill on 2026-10-29)."""
+    out = [
+        "| Strategy | Mode | Trades | Wins | Realised | Unrealised | Equity at close |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for led in ledgers:
+        out.append(
+            f"| {led.strategy} | {led.mode} | {led.trades} | {led.wins} | {led.realized_pnl:+.2f} | "
+            f"{led.unrealized_pnl:+.2f} | {_money(led.equity_close)} |"
+        )
+    out += ["", "Live slots show the paper account's equity; shadow slots show their own simulated book."]
+    return "\n".join(out) + "\n"
+
+
+def _hold_line(trades) -> str:
+    """Average hold, with day trades and positions held overnight kept apart: one average mixed minutes with weeks
+    (7017 min on 2026-10-29)."""
+    day_trades, held = [], []
+    for t in trades:
+        same_day = t.entry_time.astimezone(ET).date() == t.exit_time.astimezone(ET).date()
+        (day_trades if same_day else held).append((t.exit_time - t.entry_time).total_seconds())
+    parts = []
+    if day_trades:
+        parts.append(f"day trades {sum(day_trades) / 60 / len(day_trades):.0f} min ({len(day_trades)})")
+    if held:
+        parts.append(f"held overnight or longer {sum(held) / 86400 / len(held):.1f} days ({len(held)})")
+    return "- Average hold: " + "; ".join(parts)
 
 
 def build_report(kind: str, db: Database, settings: Settings, now: datetime | None = None) -> str:
@@ -117,6 +170,7 @@ def build_report(kind: str, db: Database, settings: Settings, now: datetime | No
     trades = db.trades.between(d0, d1, mode="live") + db.trades.between(d0, d1, mode="shadow")
     trades.sort(key=lambda t: t.exit_time)
     alerts = check_alerts(db, settings, now)
+    day_ledgers = db.ledger.for_day(day, "live") if kind == "close" else []
 
     title = {
         "premarket": "Pre-market brief",
@@ -151,7 +205,7 @@ def build_report(kind: str, db: Database, settings: Settings, now: datetime | No
     if risk and risk.get("halted"):
         lines.append(f"- **RISK HALT:** {risk['halted']}")
     slots = (hb or {}).get("slots") or {}
-    if slots:
+    if slots and not day_ledgers:  # once the ledgers are written, the close report's table replaces this line
         lines.append(
             "- Strategies: "
             + "; ".join(
@@ -201,11 +255,11 @@ def build_report(kind: str, db: Database, settings: Settings, now: datetime | No
             "",
             f"Realised so far: {realized:+.2f} on {len(trades)} trades.",
             "",
-            _trades_table(trades),
+            _trades_table(trades, day),
         ]
     elif kind == "close":
         led = db.ledger.get(day, "live")
-        lines += ["## Ledger", ""]
+        lines += ["## Ledger: wave_rider (live)", ""]
         if led:
             lines += [
                 f"- Trades {led.trades}, wins {led.wins}, losses {led.losses}",
@@ -216,14 +270,15 @@ def build_report(kind: str, db: Database, settings: Settings, now: datetime | No
             ]
         else:
             lines.append("- Ledger not written yet (bot still running or did not shut down cleanly).")
-        lines += ["", "## Trades", "", _trades_table(trades), "## Still open", "", _positions_table(db)]
+        if day_ledgers:
+            lines += ["", "## Strategies at the close", "", _ledger_table(day_ledgers).rstrip("\n")]
+        lines += ["", "## Trades", "", _trades_table(trades, day), "## Still open", "", _positions_table(db)]
         # fills vs assumed slippage
         if trades:
-            avg_hold = sum((t.exit_time - t.entry_time).total_seconds() for t in trades) / 60 / len(trades)
             lines += [
                 "## Execution",
                 "",
-                f"- Average hold {avg_hold:.0f} min",
+                _hold_line(trades),
                 "- Exit reasons: "
                 + ", ".join(
                     f"{k} {v}"

@@ -9,6 +9,13 @@
 
 **On a sell signal.** Cancel the protective stop, then send a market sell so it fills immediately. When the fill comes back, the trade is written to the database with its reason.
 
+**When the stop gets there first (fixed 2026-10-29).** The stop sits about 1% below entry, and so does the bot's own hard stop. So in a fast fall both can fire within seconds. On 29 October Alpaca's stop sold 151 NUWE at 11:27:12 ET. The bot's exit came six seconds later. The bot ignored the "already filled" reply to its cancel and sent a market sell for shares it no longer held. Alpaca refused only because NUWE could not be shorted. On a stock that can be shorted, that sell would have opened a short of the same size. The bot also kept NUWE as held, so its loss was missing from the day's records. Now:
+
+1. After cancelling the stop, the bot reads the stop's final state, waiting up to 2 seconds while Alpaca reports `pending_cancel`. If the stop filled, the bot books that fill as the exit (reason `server_stop`) and sends nothing. If the stop filled in part, the bot sells only the rest.
+2. Live slots also ask Alpaca how many shares it holds before every market sell, and never sell more. If Alpaca holds none, the position is dropped from the book with an error in the log, because it was closed outside the bot. Shadow slots skip this check, since their broker is simulated.
+
+Tests: `tests/test_order_manager.py`, the five tests after "the 2026-10-29 NUWE race".
+
 **Every tick** the bot polls its in-flight orders. It also checks whether the server-side stop fired on its own (reason `server_stop`).
 
 **Startup.** The bot's position list is reconciled with Alpaca's. Positions Alpaca has that the bot forgot (after a crash) are adopted with the peak reset to the higher of entry and current price.

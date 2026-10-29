@@ -6,12 +6,11 @@ import re
 
 from alpaca.data.enums import DataFeed, MarketType, MostActivesBy
 from alpaca.data.requests import MarketMoversRequest, MostActivesRequest, StockSnapshotRequest
-from alpaca.trading.enums import AssetClass, AssetStatus
-from alpaca.trading.requests import GetAssetsRequest
 from loguru import logger
 
 from ridethewave.clients import AlpacaClients
 from ridethewave.config import UniverseSettings
+from ridethewave.data.assets import AssetInfo, fetch_assets
 
 # Asset names that mark ETFs, ETNs, leveraged products and commodity/crypto trusts. Cross-sectional stock
 # strategies rank company stocks against each other; a 3x semiconductor ETF or a bitcoin trust in that
@@ -34,7 +33,7 @@ class UniverseBuilder:
         self.clients = clients
         self.cfg = cfg
         self.feed = DataFeed(data_feed)
-        self._assets: dict[str, object] | None = None
+        self._assets: dict[str, AssetInfo] | None = None
 
     # ----- candidates -----
     def candidates(self) -> list[str]:
@@ -51,12 +50,9 @@ class UniverseBuilder:
         raise ValueError(self.cfg.source)
 
     # ----- filters -----
-    def _load_assets(self) -> dict[str, object]:
+    def _load_assets(self) -> dict[str, AssetInfo]:
         if self._assets is None:
-            assets = self.clients.trading.get_all_assets(
-                GetAssetsRequest(status=AssetStatus.ACTIVE, asset_class=AssetClass.US_EQUITY)
-            )
-            self._assets = {a.symbol: a for a in assets}
+            self._assets = {a.symbol: a for a in fetch_assets(self.clients.trading)}
             logger.debug("loaded {} active US equity assets", len(self._assets))
         return self._assets
 
@@ -64,7 +60,7 @@ class UniverseBuilder:
         """Symbols (of the given list, or all assets) whose asset name marks them as a fund."""
         assets = self._load_assets()
         pool = symbols if symbols is not None else list(assets)
-        return {s for s in pool if s in assets and is_fund(getattr(assets[s], "name", None))}
+        return {s for s in pool if s in assets and is_fund(assets[s].name)}
 
     def filter_tradable(self, symbols: list[str]) -> list[str]:
         assets = self._load_assets()
@@ -74,8 +70,7 @@ class UniverseBuilder:
             a = assets.get(s)
             if a is None or not a.tradable:
                 continue
-            exch = str(getattr(a.exchange, "value", a.exchange)).upper()
-            if exch not in allowed:
+            if a.exchange not in allowed:
                 continue
             keep.append(s)
         return keep

@@ -48,7 +48,7 @@ You do not need to touch the system Python 3.9.
 From the project folder:
 
 ```bash
-cd "/Users/akashvenkatesan/Desktop/Projects/Finance/Ride The Wave"
+cd ~/Projects/Finance/"Ride The Wave"
 uv sync
 ```
 

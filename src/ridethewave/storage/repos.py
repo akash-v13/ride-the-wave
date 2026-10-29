@@ -216,6 +216,7 @@ class TradeRepo(_Repo):
             run_id=r["run_id"],
             entry_order_id=r["entry_order_id"],
             exit_order_id=r["exit_order_id"],
+            strategy=r["strategy"],
         )
 
 
@@ -377,6 +378,7 @@ class LedgerRepo(_Repo):
             next_allocation=r["next_allocation"],
             equity_close=r["equity_close"],
             extra=json.loads(r["extra_json"] or "{}"),
+            strategy=r["strategy"],
         )
 
 

@@ -11,12 +11,11 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pandas as pd
-from alpaca.trading.enums import AssetClass, AssetStatus
-from alpaca.trading.requests import GetAssetsRequest
 from loguru import logger
 
 from ridethewave.clients import AlpacaClients
 from ridethewave.config import UniverseSettings
+from ridethewave.data.assets import fetch_assets
 from ridethewave.data.market_data import DailyBars
 from ridethewave.data.universe import is_fund
 from ridethewave.storage import Database
@@ -37,18 +36,16 @@ class PointInTimeUniverse:
         """Active, tradable US equities on the configured exchanges. Note: today's asset list, so
         symbols that were delisted before today are missing (survivorship bias, documented)."""
         if self._pool is None:
-            assets = self.clients.trading.get_all_assets(
-                GetAssetsRequest(status=AssetStatus.ACTIVE, asset_class=AssetClass.US_EQUITY)
-            )
+            assets = fetch_assets(self.clients.trading)
             allowed = {e.upper() for e in self.cfg.exchanges}
             self._pool = sorted(
                 a.symbol
                 for a in assets
                 if a.tradable
-                and str(getattr(a.exchange, "value", a.exchange)).upper() in allowed
+                and a.exchange in allowed
                 and a.symbol.isalpha()  # skip warrants/units/preferreds with . or / in the symbol
             )
-            self._funds = {a.symbol for a in assets if is_fund(getattr(a, "name", None))}
+            self._funds = {a.symbol for a in assets if is_fund(a.name)}
             logger.info("point-in-time pool: {} symbols", len(self._pool))
         return self._pool
 

@@ -237,8 +237,12 @@ class RiskSettings(_Strict):
 class OperatorSettings(_Strict):
     report_times_et: list[str] = Field(default_factory=lambda: ["09:00", "11:30", "14:00", "16:15", "21:00"])
     heartbeat_stale_seconds: int = Field(90, ge=30)
-    notify: bool = True  # macOS notifications for alerts
+    notify: bool = True  # alerts and report notices: macOS banner, plus a phone push when NTFY_TOPIC is set
     report_dir: str = "data/reports"
+    # Restart the bot if the Mac rebooted in trading hours (operator/watchdog.py). See docs/features/14-operator.md.
+    watchdog: bool = True
+    # Push service for phone alerts. The topic is a secret (NTFY_TOPIC in .env); only the server lives here.
+    ntfy_server: str = "https://ntfy.sh"
 
 
 class StorageSettings(_Strict):
@@ -291,6 +295,9 @@ class Secrets(BaseSettings):
     alpaca_api_key: str
     alpaca_secret_key: str
     alpaca_paper: bool = True
+    # ntfy topic for phone alerts (operator/notify.py). Anyone who knows the topic can read the alerts, so it
+    # is treated as a secret. None or blank = no phone push.
+    ntfy_topic: str | None = None
 
     @field_validator("alpaca_paper")
     @classmethod

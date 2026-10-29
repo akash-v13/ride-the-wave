@@ -45,6 +45,7 @@ class DailySlot:
         self.positions: dict[str, Position] = {}
         self.trades_today: list[Trade] = []
         self.decided_on: str | None = None  # YYYY-MM-DD of the last decision
+        self.skipped: dict | None = None  # {"day", "reason"} when the last due decision could not be made
         self.last_targets: dict[str, float] = {}
         self.last_equity: float = capital
         self.universe: list[str] = []
@@ -229,6 +230,12 @@ class DailySlot:
         led.extra["targets"] = self.last_targets
         return led
 
+    def skip(self, today: str, reason: str) -> None:
+        """Mark today as handled without a decision (no retry every tick) and remember why, so the
+        heartbeat and the operator's alert check can report it."""
+        self.decided_on = str(today)
+        self.skipped = {"day": str(today), "reason": reason}
+
     def snapshot(self) -> dict:
         return {
             "mode": self.spec.mode,
@@ -237,5 +244,6 @@ class DailySlot:
             "equity": round(self.last_equity, 2),
             "cash": round(self.cash, 2),
             "decided_on": self.decided_on,
+            "skipped": self.skipped,
             "trades": len(self.trades_today),
         }
