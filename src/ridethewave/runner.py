@@ -41,6 +41,10 @@ from ridethewave.strategy import Strategy, build
 ET = ZoneInfo("America/New_York")
 LIVE_RUN_ID = "live"
 MARKET = "SPY"
+# Universe build retries. A build that fails at start-up used to leave the whole session without symbols
+# until the 30-minute refresh, and in October 2026 the refresh kept failing too (docs/progress.md).
+UNIVERSE_RETRY_WAITS = (15, 45)  # seconds to wait before the 2nd and 3rd start-up attempt
+EMPTY_UNIVERSE_RETRY_SECONDS = 120  # while the universe is empty, try again this often
 
 
 @dataclass
@@ -109,7 +113,7 @@ class BotRunner:
 
         today = datetime.now(ET).strftime("%Y-%m-%d")
         self._keep_awake()
-        self._rebuild_universe()
+        self._rebuild_universe(attempts=1 + len(UNIVERSE_RETRY_WAITS))
         self._build_slots(today)
         self._build_portfolios(today)
         self._build_options(today)
@@ -229,15 +233,12 @@ class BotRunner:
                     # closed is only believed after the open has passed (guards a stale or early clock read)
                     market_open = clk.is_open or (open_at is not None and now < open_at + timedelta(minutes=2))
                     last_clock_check = time.monotonic()
-                if (
-                    self.s.universe.refresh_minutes > 0
-                    and time.monotonic() - last_universe_refresh > self.s.universe.refresh_minutes * 60
-                ):
-                    self._rebuild_universe()
-                    for sl in self.slots:
-                        sl.symbols = self._symbols_for(sl.strategy)
-                    for ps in self.portfolios:
-                        ps.universe = self._portfolio_universe(ps.spec)
+                since_refresh = time.monotonic() - last_universe_refresh
+                refresh_due = (
+                    self.s.universe.refresh_minutes > 0 and since_refresh > self.s.universe.refresh_minutes * 60
+                )
+                if refresh_due or (not self.universe and since_refresh > EMPTY_UNIVERSE_RETRY_SECONDS):
+                    self._refresh_universe(today)
                     last_universe_refresh = time.monotonic()
             except Exception as e:  # noqa: BLE001
                 logger.exception("tick failed: {}", e)
@@ -300,6 +301,7 @@ class BotRunner:
                 strategy=spec.id,
                 protective_stop=strategy.uses_protective_stop,
                 strategy_obj=strategy,  # sizing (qty_for) and stop (stops) hooks
+                verify_holdings=spec.mode == "live",  # never sell more than Alpaca holds (2026-10-29, NUWE)
             )
             engine = TradingEngine(self.s, strategy, book, orders, self.agg, self.db, LIVE_RUN_ID)
             if spec.mode == "live":
@@ -372,18 +374,18 @@ class BotRunner:
                 self._decide_portfolio(ps, now, today)
             except Exception as e:  # noqa: BLE001
                 logger.exception("[{}] decision failed: {}", ps.spec.id, e)
-                ps.decided_on = today  # do not retry every tick
+                ps.skip(today, f"decision failed: {type(e).__name__}")  # do not retry every tick
 
     def _decide_portfolio(self, ps: DailySlot, now: datetime, today: str) -> None:
         from datetime import date as _date
 
         if not ps.universe:  # e.g. the universe build failed at start-up (2026-09-24): try once more now
             if not self.universe:
-                self._rebuild_universe()
+                self._refresh_universe(today, attempts=2)
             ps.universe = self._portfolio_universe(ps.spec)
             if not ps.universe:
                 logger.warning("[{}] universe is empty; decision skipped today", ps.spec.id)
-                ps.decided_on = today
+                ps.skip(today, "universe empty")
                 return
         symbols = self._portfolio_symbols(ps)
         d = _date.fromisoformat(today)
@@ -396,7 +398,7 @@ class BotRunner:
         panel = _panel_from_bars(history, todays, d)
         if panel is None:
             logger.warning("[{}] no daily history; decision skipped", ps.spec.id)
-            ps.decided_on = today
+            ps.skip(today, "no daily history")
             return
         fills = ps.decide(panel, prices, now, ps.universe)
         for f in fills:
@@ -453,7 +455,7 @@ class BotRunner:
                 self._decide_options(os_, now, today)
             except Exception as e:  # noqa: BLE001
                 logger.exception("[{}] options decision failed: {}", os_.spec.id, e)
-                os_.decided_on = today
+                os_.skip(today, f"decision failed: {type(e).__name__}")
 
     def _decide_options(self, os_: OptionsSlot, now: datetime, today: str) -> None:
         from datetime import date as _date
@@ -462,7 +464,7 @@ class BotRunner:
         option_quotes, stock_prices, spot = self._options_quotes(os_)
         if spot <= 0:
             logger.warning("[{}] no spot for {}; decision skipped", os_.spec.id, os_.spec.underlying)
-            os_.decided_on = today
+            os_.skip(today, f"no price for {os_.spec.underlying}")
             return
         realized_vol = None
         if os_.spec.entry_gate == "vrp":
@@ -677,17 +679,55 @@ class BotRunner:
                 logger.warning("RISK FLATTEN [{}]: closing {} positions", sl.spec.id, len(sl.book.positions))
                 sl.orders.flatten_all(datetime.now(timezone.utc), reason="risk_flatten")
 
-    def _rebuild_universe(self) -> None:
-        try:
-            self.universe = self.universe_builder.build()
-            self.db.state.set("universe", self.universe)
-        except Exception as e:  # noqa: BLE001
-            logger.error("universe build failed: {} (keeping {} symbols)", e, len(self.universe))
+    def _rebuild_universe(self, attempts: int = 1) -> bool:
+        """Build today's universe; on failure keep the previous list. With ``attempts`` > 1, wait
+        UNIVERSE_RETRY_WAITS between tries (start-up). Returns True when a build succeeded."""
+        for i in range(attempts):
+            if i:
+                wait = UNIVERSE_RETRY_WAITS[min(i - 1, len(UNIVERSE_RETRY_WAITS) - 1)]
+                logger.info("universe build: attempt {} of {} in {} s", i + 1, attempts, wait)
+                for _ in range(wait):
+                    if self._stop:
+                        return False
+                    time.sleep(1)
+            try:
+                self.universe = self.universe_builder.build()
+                self.db.state.set("universe", self.universe)
+                return True
+            except Exception as e:  # noqa: BLE001
+                logger.error("universe build failed: {} (keeping {} symbols)", e, len(self.universe))
+        return False
 
-    def _warmup(self) -> None:
+    def _refresh_universe(self, today: str, attempts: int = 1) -> None:
+        """Rebuild the universe and hand the new lists to every intraday slot and portfolio.
+
+        Symbols nobody watched before get their recent minute bars (warm-up), so a stock added mid-session
+        has history like one added at the open. When the universe was empty until now (the start-up build
+        failed), the strategies also get their daily context, as at a normal start. That second step only
+        runs from empty, because it resets per-day state such as the opening-range breakout's ranges."""
+        was_empty = not self.universe
+        before = set(self._all_symbols())
+        if not self._rebuild_universe(attempts):
+            return
+        for sl in self.slots:
+            sl.symbols = self._symbols_for(sl.strategy)
+        for ps in self.portfolios:
+            ps.universe = self._portfolio_universe(ps.spec)
+        new = sorted(set(self._all_symbols()) - before)
+        if not new:
+            return
+        try:
+            self._warmup(new)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("warm-up for {} new symbols failed: {}", len(new), e)
+        if was_empty and self.universe:
+            logger.info("universe recovered: {} symbols; handing strategies their daily context", len(self.universe))
+            self._session_start(today)
+
+    def _warmup(self, symbols: list[str] | None = None) -> None:
         if self.s.scan.warmup_minutes <= 0:
             return
-        symbols = self._all_symbols()
+        symbols = symbols if symbols is not None else self._all_symbols()
         bars = self.history.warmup(symbols, self.s.scan.warmup_minutes)
         n = self.agg.seed(bars)
         for sl in self.slots:

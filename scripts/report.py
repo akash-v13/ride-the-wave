@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from ridethewave.config import load_settings
-from ridethewave.operator.notify import notify
+from ridethewave.operator.notify import notify, ntfy_topic
 from ridethewave.operator.reports import check_alerts, write_report
 from ridethewave.storage import Database
 
@@ -28,10 +28,16 @@ def main() -> int:
     if alerts:
         print("ALERTS:", *alerts, sep="\n  ")
     if not args.no_notify:
+        # A routine notice, so the phone push goes at default priority; the alerts themselves are pushed at high
+        # priority by alerts_check.py. Five a day doubles as a sign of life while away from the Mac.
         notify(
             "Ride The Wave",
             f"{args.kind} report ready" + (f" ({len(alerts)} alert(s))" if alerts else ""),
             settings.operator.notify,
+            topic=ntfy_topic() if settings.operator.notify else None,
+            server=settings.operator.ntfy_server,
+            priority="default",
+            tags="memo",
         )
     db.close()
     return 0

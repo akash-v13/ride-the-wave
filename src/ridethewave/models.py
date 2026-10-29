@@ -115,7 +115,9 @@ class Trade:
         if self.entry_price == 0:
             return 0.0
         sign = -1.0 if self.qty < 0 else 1.0  # a short profits when the price falls
-        return (self.exit_price / self.entry_price - 1.0) * 100.0 * sign
+        # Relative to the size of the entry. A credit option structure is booked with a negative entry value, and
+        # dividing by the signed value flipped its sign: a +$303 bull put spread showed -90% (fixed 2026-10-29).
+        return (self.exit_price - self.entry_price) / abs(self.entry_price) * 100.0 * sign
 
 
 @dataclass(slots=True)

@@ -158,7 +158,11 @@ def fill_value(
     closing: bool = False,
 ) -> float | None:
     """Like ``structure_value`` but each leg pays ``spread_fraction`` of its half-spread against you:
-    buying pays above mid, selling receives below mid. ``closing`` reverses every leg's side."""
+    buying pays above mid, selling receives below mid. ``closing`` reverses every leg's side.
+
+    Opening needs a two-sided quote on every option leg. Closing also accepts a quote with an ask and
+    no bid, which is normal for a far out-of-the-money option near expiry (bid 0, ask 0.02): buying it
+    back pays the ask, and selling it gets nothing. Before 2026-10-29 such a close returned None."""
     total = 0.0
     for leg in legs:
         side = leg["side"] if not closing else ("sell" if leg["side"] == "buy" else "buy")
@@ -170,13 +174,34 @@ def fill_value(
             half = px * 0.0002  # 2 bp half-spread for the stock leg
         else:
             bid, ask = option_quotes.get(leg["symbol"], (0.0, 0.0))
-            if bid <= 0 or ask <= 0:
-                return None
-            px = (bid + ask) / 2
             units = leg["ratio"]
-            half = (ask - bid) / 2
+            if bid > 0 and ask > 0:
+                px = (bid + ask) / 2
+                half = (ask - bid) / 2
+            elif closing and ask > 0:
+                px, half = (ask if side == "buy" else 0.0), 0.0  # no mid to improve on
+            else:
+                return None
         px += spread_fraction * half * (1 if side == "buy" else -1)
         # value is always from the holder's view (buy legs positive) so entry/exit compare directly
+        total += (1 if leg["side"] == "buy" else -1) * px * units
+    return total
+
+
+def intrinsic_value(legs: list[dict], spot: float, stock_prices: dict[str, float]) -> float | None:
+    """V per unit if every option were worth only its exercise value at ``spot``. The last-resort price
+    for a close when no leg has a quote: close to the truth a day before expiry, too low earlier."""
+    if not spot or spot <= 0:
+        return None
+    total = 0.0
+    for leg in legs:
+        if leg["instrument"] == "stock":
+            px = stock_prices.get(leg["symbol"]) or spot
+            units = leg["ratio"] / CONTRACT_MULT
+        else:
+            k = float(leg["strike"])
+            px = max(spot - k, 0.0) if leg["instrument"] == "call" else max(k - spot, 0.0)
+            units = leg["ratio"]
         total += (1 if leg["side"] == "buy" else -1) * px * units
     return total
 

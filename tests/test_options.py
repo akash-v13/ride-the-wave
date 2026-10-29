@@ -180,3 +180,80 @@ def test_strike_step_widens_the_structure():
     slot = OptionsSlot(spec, None, "live", capital=20_000)
     slot.decide(TODAY, NOW, 100.0, {}, {"TST": 100.0}, lambda lo, hi: ch)
     assert slot.open[0].legs[1]["strike"] == 95
+
+
+# 2026-10-29: the shadow QQQ covered call (bought QQQ at 736.205, sold the 773 call) was closed a day before
+# expiry with QQQ at 713.40 and the call quoted bid 0 / ask 0.02. The close found no fill price, the mark had
+# been lost in a restart, and the books took the entry value: P/L $0.00 instead of about -$1,890.
+CC_LEGS = [
+    {
+        "symbol": "QQQ",
+        "instrument": "stock",
+        "side": "buy",
+        "ratio": 100,
+        "strike": None,
+        "expiry": None,
+        "mid": 736.205,
+    },
+    {
+        "symbol": "QQQ261030C00773000",
+        "instrument": "call",
+        "side": "sell",
+        "ratio": 1,
+        "strike": 773.0,
+        "expiry": "2026-10-30",
+        "mid": 3.985,
+    },
+]
+CC_DAY = date(2026, 10, 29)
+CC_NOW = datetime(2026, 10, 29, 19, 40, tzinfo=timezone.utc)
+NO_CHAIN = lambda lo, hi: None  # noqa: E731  the vrp gate finds no chain, so nothing new opens
+
+
+def _covered_call_slot(db, entry_net: float = -732.2656) -> OptionsSlot:
+    spec = OptionsSpec(
+        id="cc_tst", template="covered_call", underlying="QQQ", close_dte=1, entry_gate="vrp", spread_fraction=0.0
+    )
+    st = Structure("cc1", "cc_tst", "live", "shadow", "covered_call", "QQQ", 1, CC_LEGS, entry_net, None, None, NOW)
+    db.structures.insert(st.to_row())
+    slot = OptionsSlot(spec, db, "live", capital=80_000)
+    slot.load()
+    return slot
+
+
+def test_close_prices_an_option_with_an_ask_and_no_bid():
+    quotes = {"QQQ261030C00773000": (0.0, 0.02)}
+    assert fill_value(CC_LEGS, quotes, {"QQQ": 713.40}, 0.25) is None  # opening still needs a two-sided quote
+    v = fill_value(CC_LEGS, quotes, {"QQQ": 713.40}, 0.0, closing=True)
+    assert v == pytest.approx(713.40 - 0.02)  # sell the shares, buy the call back at the ask
+    long_put = [{"symbol": "P", "instrument": "put", "side": "buy", "ratio": 1, "strike": 90.0, "expiry": None}]
+    assert fill_value(long_put, {"P": (0.0, 0.04)}, {}, 0.25, closing=True) == 0.0  # selling it gets nothing
+
+
+def test_covered_call_close_after_a_restart_books_the_real_loss(db):
+    slot = _covered_call_slot(db)
+    out = slot.decide(CC_DAY, CC_NOW, 713.40, {"QQQ261030C00773000": (0.0, 0.02)}, {"QQQ": 713.40}, NO_CHAIN)
+    assert out["actions"][0].startswith("closed covered_call: dte_exit")
+    t = slot.trades_today[0]
+    assert t.pnl == pytest.approx((713.40 - 0.02 - 732.2656) * 100, abs=0.01)  # about -1,888.56, not 0
+    assert db.structures.recent(1)[0]["realized_pl"] == pytest.approx(t.pnl, abs=0.01)
+
+
+def test_marks_survive_a_restart_and_price_a_close_with_no_quotes(db):
+    slot = _covered_call_slot(db)
+    slot.mark({"QQQ261030C00773000": (0.01, 0.03)}, {"QQQ": 719.45})  # yesterday's shutdown mark
+    again = OptionsSlot(slot.spec, db, "live", capital=80_000)
+    again.load()
+    assert again.open[0].notes["value"] == pytest.approx(719.45 - 0.02)
+    assert again.equity() == pytest.approx(slot.equity())  # the restart does not drop the open value
+    again.decide(CC_DAY, CC_NOW, 713.40, {}, {}, NO_CHAIN)  # no quotes at all at the close
+    t = again.trades_today[0]
+    assert t.pnl == pytest.approx((719.45 - 0.02 - 732.2656) * 100, abs=0.01)
+    assert "priced from the last mark" in db.structures.recent(1)[0]["close_reason"]
+
+
+def test_close_with_no_quotes_and_no_mark_uses_intrinsic_value(db):
+    slot = _covered_call_slot(db)
+    slot.decide(CC_DAY, CC_NOW, 713.40, {}, {"QQQ": 713.40}, NO_CHAIN)  # the call is out of the money: worth 0
+    assert slot.trades_today[0].pnl == pytest.approx((713.40 - 732.2656) * 100, abs=0.01)
+    assert "intrinsic value" in db.structures.recent(1)[0]["close_reason"]

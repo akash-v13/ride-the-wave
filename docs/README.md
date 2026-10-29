@@ -4,7 +4,7 @@ All written material for the project. Read in this order if you are new:
 
 1. [architecture.md](architecture.md): the components, how data flows, and why each decision was made.
 2. [strategy.md](strategy.md): the exact trading rules with parameters and a worked example.
-3. [requirements.md](requirements.md): how to set up the machine.
+3. [requirements.md](requirements.md): how to set up the machine. [mac-mini-setup.md](mac-mini-setup.md): moving the system to the always-on Mac mini, and reaching it from anywhere.
 4. [api/](api/): Alpaca endpoint notes with sample responses.
 5. [decisions.md](decisions.md): the decision log, one entry per technical choice.
 6. [features/](features/): one plain-English page per feature as each is built.

@@ -5,8 +5,9 @@ open (and the entry gate passes) take a chain snapshot, resolve the template, si
 ``shadow`` fills every leg against the live quote paying a fraction of the half-spread and keeps the
 books here; ``live`` sends the legs to the paper account as a multi-leg order (fills assumed at mid
 for the books; the broker order id is kept on the structure). Cash and the open structures persist
-across restarts. Every closed structure is also booked as a Trade (symbol "UNDERLYING:template") so
-ledgers, reports and the leaderboard see options P&L without special cases.
+across restarts, and so does each structure's last mark. Every closed structure is also booked as a
+Trade (symbol "UNDERLYING:template") so ledgers, reports and the leaderboard see options P&L without
+special cases.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from ridethewave.options.lifecycle import (
     describe,
     exit_reason,
     fill_value,
+    intrinsic_value,
     leg_dicts,
     leg_orders,
     size_structure,
@@ -49,6 +51,7 @@ class OptionsSlot:
         self.open: list[Structure] = []
         self.trades_today: list[Trade] = []
         self.decided_on: str | None = None
+        self.skipped: dict | None = None  # {"day", "reason"} when the last due decision could not be made
         self.last_value: float = 0.0  # Σ V_now × 100 × qty over open structures
         self.last_note: str = ""
 
@@ -61,6 +64,11 @@ class OptionsSlot:
         if "cash" in state:
             self.cash = float(state["cash"])
             self.decided_on = state.get("decided_on")
+        marks = state.get("marks") or {}
+        for st in self.open:
+            if st.id in marks:
+                st.notes["value"] = float(marks[st.id])
+        self.last_value = sum(st.notes["value"] * CONTRACT_MULT * st.qty for st in self.open if "value" in st.notes)
         if self.open:
             logger.info("[{}] resumed {} open structure(s), cash ${:,.2f}", self.spec.id, len(self.open), self.cash)
 
@@ -74,6 +82,7 @@ class OptionsSlot:
                 "capital": self.capital,
                 "decided_on": self.decided_on,
                 "open": [s.id for s in self.open],
+                "marks": {s.id: s.notes["value"] for s in self.open if "value" in s.notes},
                 "equity": self.equity(),
                 "note": self.last_note,
                 "updated_at": datetime.now().isoformat(),
@@ -91,6 +100,7 @@ class OptionsSlot:
             elif "value" in st.notes:
                 total += st.notes["value"] * CONTRACT_MULT * st.qty
         self.last_value = total
+        self._save()  # a restart keeps the marks; a close with no quote falls back on them
         return self.equity()
 
     def equity(self) -> float:
@@ -227,7 +237,8 @@ class OptionsSlot:
         else:
             v_exit = fill_value(st.legs, option_quotes, stock_prices, self.spec.spread_fraction, closing=True)
         if v_exit is None:
-            v_exit = st.notes.get("value", -st.entry_net)
+            v_exit, source = self._fallback_exit_value(st, option_quotes, stock_prices)
+            reason = f"{reason} | priced from {source}"
         self.cash += v_exit * CONTRACT_MULT * st.qty
         pl = (st.entry_net + v_exit) * CONTRACT_MULT * st.qty
         st.status, st.closed_at, st.exit_net, st.realized_pl, st.close_reason = (
@@ -257,6 +268,24 @@ class OptionsSlot:
             self.db.trades.insert(t)
         logger.info("[{}] CLOSED {} x{}: {} (P&L {:+.2f})", self.spec.id, st.template_id, st.qty, reason, pl)
 
+    def _fallback_exit_value(self, st: Structure, option_quotes, stock_prices) -> tuple[float, str]:
+        """The price a close books when the fill price is missing, best source first. The source is
+        logged and kept in the close reason. Before 2026-10-29 a missing price after a restart fell
+        straight back to the entry value: cc_qqq, down about $1,890, was booked at $0.00."""
+        v = structure_value(st.legs, option_quotes, stock_prices)
+        if v is not None:
+            source = "mid, a leg had a one-sided quote"
+        elif "value" in st.notes:
+            v, source = st.notes["value"], "the last mark"
+        else:
+            v = intrinsic_value(st.legs, stock_prices.get(st.underlying, 0.0), stock_prices)
+            source = "intrinsic value, no quotes and no mark"
+        if v is None:
+            logger.error("[{}] {}: no price of any kind; booked at the entry value (P&L 0)", self.spec.id, st.id)
+            return -st.entry_net, "the entry value, no price of any kind"
+        logger.warning("[{}] {}: no fill price for the close; priced from {}", self.spec.id, st.id, source)
+        return v, source
+
     # ---------- end of day ----------
     def ledger(self, today: str, prev: DailyLedger | None, cfg: CapitalSettings) -> DailyLedger:
         led = build_ledger(
@@ -284,6 +313,12 @@ class OptionsSlot:
         led.extra["note"] = self.last_note
         return led
 
+    def skip(self, today: str, reason: str) -> None:
+        """Mark today as handled without a decision (no retry every tick) and remember why, so the
+        heartbeat and the operator's alert check can report it."""
+        self.decided_on = str(today)
+        self.skipped = {"day": str(today), "reason": reason}
+
     def snapshot(self) -> dict:
         return {
             "mode": self.spec.mode,
@@ -294,5 +329,6 @@ class OptionsSlot:
             "cash": round(self.cash, 2),
             "unrealized": round(self.unrealized(), 2),
             "decided_on": self.decided_on,
+            "skipped": self.skipped,
             "note": self.last_note[:200],
         }

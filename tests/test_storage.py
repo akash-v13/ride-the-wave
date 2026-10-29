@@ -59,3 +59,38 @@ def test_backtest_run(db):
     db.backtests.set_summary("bt1", {"pnl": 10})
     assert len(db.backtests.equity_curve("bt1")) == 2
     assert db.backtests.runs()[0]["id"] == "bt1"
+
+
+def test_ledger_rows_read_back_with_their_strategy(db):
+    # _row_to_ledger dropped the column, so every row read back claimed to be wave_rider (found 2026-10-29)
+    db.ledger.upsert(
+        DailyLedger("2026-10-29", "shadow", "live", 20_000, 20_000, realized_pnl=303.25, strategy="bps_qqq")
+    )
+    db.ledger.upsert(DailyLedger("2026-10-29", "live", "live", 10_000, 10_000, realized_pnl=-32.93))
+    assert [(r.strategy, r.realized_pnl) for r in db.ledger.for_day("2026-10-29")] == [
+        ("bps_qqq", 303.25),
+        ("wave_rider", -32.93),
+    ]
+    assert db.ledger.get("2026-10-29", "live", "bps_qqq").strategy == "bps_qqq"
+
+
+def test_pnl_pct_sign_for_credit_structures():
+    t0 = datetime(2026, 10, 22, 19, 40, tzinfo=timezone.utc)
+    t1 = t0 + timedelta(days=7)
+    # a credit spread is booked with a negative entry value: sold for 3.365, bought back for 0.3325
+    credit = Trade("QQQ:bull_put_spread", 100, -3.365, t0, -0.3325, t1, "dte_exit", -0.3325)
+    assert round(credit.pnl, 2) == 303.25 and round(credit.pnl_pct, 2) == 90.12
+    assert round(Trade("X", 100, -3.0, t0, -4.5, t1, "stop", -3.0).pnl_pct, 2) == -50.0  # a losing credit
+    # stocks and debits are unchanged: long, short, debit spread
+    assert round(Trade("AAPL", 10, 100.0, t0, 101.0, t1, "x", 101.0).pnl_pct, 2) == 1.0
+    assert round(Trade("AAPL", -10, 100.0, t0, 101.0, t1, "x", 100.0).pnl_pct, 2) == -1.0
+    assert round(Trade("SPY:call_spread", 100, 2.0, t0, 3.0, t1, "x", 3.0).pnl_pct, 2) == 50.0
+
+
+def test_trades_read_back_with_their_strategy(db):
+    # same omission as the ledger: read-back trades all said wave_rider, which the report's strategy column exposed
+    t0 = datetime(2026, 10, 29, 19, 40, tzinfo=timezone.utc)
+    db.trades.insert(Trade("CDE", 10, 13.88, t0, 13.95, t0, "xs_close", 13.95, mode="shadow", strategy="xs_combo"))
+    db.trades.insert(Trade("CDE", 10, 13.88, t0, 13.95, t0, "xs_close", 13.95, mode="shadow", strategy="xs_overnight"))
+    got = db.trades.between(t0, t0 + timedelta(seconds=1), mode="shadow")
+    assert sorted(t.strategy for t in got) == ["xs_combo", "xs_overnight"]

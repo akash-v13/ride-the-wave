@@ -151,8 +151,10 @@ risk:                          # kill switches, see docs/features/14-operator.md
 operator:
   report_times_et: ["09:00", "11:30", "14:00", "16:15", "21:00"]
   heartbeat_stale_seconds: 90
-  notify: true                 # macOS notifications for alerts
+  notify: true                 # alerts: macOS banner, plus a phone push when NTFY_TOPIC is set in .env
   report_dir: data/reports
+  watchdog: true               # restart the bot after a reboot in trading hours (07:00-15:45 ET, weekdays)
+  ntfy_server: https://ntfy.sh # phone push service; the topic itself is a secret and lives in .env
 
 storage:
   db_path: data/ridethewave.db
