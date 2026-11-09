@@ -16,6 +16,16 @@
 
 Tests: `tests/test_order_manager.py`, the five tests after "the 2026-10-29 NUWE race".
 
+**When the stop is still filling (fixed 2026-11-09).**
+- **What happened.** On 6 November the bot exited 95 WULF. After the cancel was sent, the stop read as `partially_filled` with 59 sold. The bot took that as final and asked to sell the other 36. The stop was in fact still filling and sold 4 more, so Alpaca refused the order: only 32 shares were left.
+- **Why the shares were stranded.** The position stayed marked as exiting but had no order behind it. The strategy's exit check and the 15:55 flatten both skip such positions, so the 32 shares stayed in the account over the weekend without a stop. On 9 November the start-up reconcile adopted them, and the bot sold them for a gain (+$36.58, by luck).
+- **The fix, in two parts:**
+  1. The stop's state is now read only once it is terminal (filled, cancelled, expired), for up to 2 seconds, not merely once it stops reporting `pending_cancel`.
+  2. If the market sell is refused, the exiting mark is cleared, so the next exit signal or the flatten retries with a fresh read of the holdings.
+- **Still imprecise:** when a stop fills in part, the whole position is booked at the market sell's price, not split between the two fills. The error is small: cents a share on the stop's part.
+
+Tests: the two after "2026-11-06 WULF".
+
 **Every tick** the bot polls its in-flight orders. It also checks whether the server-side stop fired on its own (reason `server_stop`).
 
 **Startup.** The bot's position list is reconciled with Alpaca's. Positions Alpaca has that the bot forgot (after a crash) are adopted with the peak reset to the higher of entry and current price.
