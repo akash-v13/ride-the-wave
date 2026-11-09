@@ -14,8 +14,9 @@ intraday slots, so the reports, the web page and the leaderboard see them.
 and overnight holds on the paper account are the next step once these have been observed for a
 while; the config refuses any mode but `shadow` until then.
 
-**Rules borrowed from TraderPro.** Whole shares; a same-side adjustment smaller than 1% of the
-slot's capital is skipped so a portfolio does not churn on rounding; opening, closing and flipping
+**Rules borrowed from TraderPro.** Whole shares; a same-side adjustment smaller than `dead_band_pct` (default 1%) of the
+slot's capital is skipped so a portfolio does not churn on rounding (keep it well below one position's
+size: `sa_volrev`, at 0.4% a name, uses 0.1% since 2026-11-04); opening, closing and flipping
 always go through; gross exposure is capped at `max_gross` (1.0 = no leverage).
 
 **Worked example.** `pm_megacaps`: 12-1 price momentum on the 20 mega caps, top 30% equal-weight,
@@ -25,7 +26,7 @@ names lead, a 1-share difference from price drift is inside the dead band and no
 
 **Settings.** `portfolios:` list with `id`, `kind` (daily registry name), `universe` (named list,
 comma-separated symbols, or `scan` for the bot's own universe with funds removed), `weight`,
-`rebalance_days`, `decision_time`, `slippage_bps`, `max_gross`, `params`. Ids share the same space
+`rebalance_days`, `decision_time`, `slippage_bps`, `max_gross`, `dead_band_pct`, `params`. Ids share the same space
 as `strategies:` ids.
 
 **How to check.** `uv run python scripts/run_bot.py --dry-run` prints each portfolio's targets as of

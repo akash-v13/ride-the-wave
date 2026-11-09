@@ -193,3 +193,42 @@ def test_holdings_are_not_checked_unless_asked(om):
     _held_position(m, broker, book)
     m.handle([_sell()], T0 + timedelta(minutes=5))
     assert len(_market_sells(broker)) == 1
+
+
+# ---- 2026-11-06 WULF: the stop kept filling after it was read, the sell was refused and nobody retried ----
+def test_a_stop_still_filling_is_read_only_once_it_has_settled(om):
+    m, broker, book = om
+    stop_id = _held_position(m, broker, book)
+    stop = broker.orders[stop_id]
+    stop.status, stop.filled_qty, stop.filled_avg_price = "partially_filled", 4, 98.9
+    real_get, reads = broker.get_order, []
+
+    def get_order(oid):
+        if oid == stop_id:
+            reads.append(oid)
+            if len(reads) == 2:  # the cancel lands, two more shares filled on the way
+                stop.status, stop.filled_qty = "canceled", 6
+        return real_get(oid)
+
+    broker.get_order = get_order
+    broker.cancel = lambda oid: broker.cancelled.append(oid)  # Alpaca has not processed the cancel yet
+    m._sleep = lambda s: None
+    m.handle([_sell()], T0 + timedelta(minutes=5))
+    sells = _market_sells(broker)
+    assert len(reads) == 2 and len(sells) == 1 and sells[0].qty == 3  # 9 - 6, not 9 - 4
+
+
+def test_a_refused_sell_is_retried_by_the_flatten(om):
+    m, broker, book = om
+    _held_position(m, broker, book)
+    real_sell = broker.submit_market_sell
+
+    def refuse(symbol, qty, cid):
+        raise RuntimeError("insufficient qty available for order")
+
+    broker.submit_market_sell = refuse
+    m.handle([_sell()], T0 + timedelta(minutes=5))  # logged, not raised
+    assert _market_sells(broker) == [] and not book.positions["AAPL"].exit_pending
+    broker.submit_market_sell = real_sell
+    m.flatten_all(T0 + timedelta(hours=1))
+    assert len(_market_sells(broker)) == 1 and book.positions["AAPL"].exit_pending

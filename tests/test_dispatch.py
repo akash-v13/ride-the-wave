@@ -24,6 +24,13 @@ def test_due_only_after_time_and_once():
     assert names(at(14, 30)) == ["report-midday", "report-morning"]
 
 
+def test_market_recording_runs_before_the_close():
+    assert "record-market" not in names(at(15, 40))
+    assert "record-market" in names(at(15, 46))
+    assert "record-market" not in names(at(15, 46), {"record-market", "report-midday", "report-morning"})
+    assert "record-market" in names(at(19, 30))  # late, after the close: the script records the closing quotes
+
+
 def test_stale_tasks_are_skipped():
     # at 22:00 the close report (16:15) is more than four hours old and is skipped; nightly and research run
     assert names(at(22, 0)) == ["nightly", "report-research"]

@@ -351,12 +351,30 @@ class BotRunner:
         return resolve_daily_universe(spec.universe)
 
     def _portfolio_symbols(self, ps: DailySlot) -> list[str]:
-        extra = {MARKET}
+        extra = {MARKET, *getattr(ps.strategy, "extra_symbols", [])}
         for attr in ("symbol", "defensive"):
             v = getattr(ps.strategy.p, attr, None)
             if v:
                 extra.add(v)
         return sorted(set(ps.universe) | set(ps.positions) | extra)
+
+    def _external_series(self, ps: DailySlot) -> dict:
+        """Outside series a strategy asked for (``external_series``), refreshed from the source when
+        possible and otherwise read from the last download. A missing series is left out and the
+        strategy decides what that means; for the stat-arb slot, no new cohorts."""
+        from ridethewave.data import external
+
+        out: dict = {}
+        for name in getattr(ps.strategy, "external_series", []):
+            try:
+                external.download(name, timeout=20)
+            except Exception as e:  # noqa: BLE001 - the saved copy is still usable
+                logger.warning("[{}] could not refresh {}: {}; using the saved copy", ps.spec.id, name, e)
+            try:
+                out[name] = external.load(name)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[{}] no {} history: {}", ps.spec.id, name, e)
+        return out
 
     def _mark_portfolio(self, ps: DailySlot) -> None:
         if not ps.positions:
@@ -394,13 +412,14 @@ class BotRunner:
         history = self.daily_adj._fetch(symbols, s_utc, e_utc)  # always fresh: the cache is fetch-once
         snaps = self.poller.poll(symbols)
         prices = {sym: r.tick.price for sym, r in snaps.items() if r.tick.price > 0}
+        quotes = {sym: (r.tick.bid, r.tick.ask) for sym, r in snaps.items()}  # stored beside each fill
         todays = [r.daily_bar for r in snaps.values() if r.daily_bar is not None]
         panel = _panel_from_bars(history, todays, d)
         if panel is None:
             logger.warning("[{}] no daily history; decision skipped", ps.spec.id)
             ps.skip(today, "no daily history")
             return
-        fills = ps.decide(panel, prices, now, ps.universe)
+        fills = ps.decide(panel, prices, now, ps.universe, self._external_series(ps), quotes)
         for f in fills:
             logger.info(
                 "[{}] fill {} {:+.0f} @ {:.2f} (target {:+.1%})",

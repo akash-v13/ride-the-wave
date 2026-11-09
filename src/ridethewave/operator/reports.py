@@ -84,6 +84,10 @@ def check_alerts(
 
 
 # ---------------------------------------------------------------- pages
+# A strategy with more rows than this gets one summary line: the stat-arb slot alone can hold ~600 positions.
+MAX_ROWS_PER_STRATEGY = 25
+
+
 def _positions_table(db: Database) -> str:
     rows = db.positions.all_rows()
     if not rows:
@@ -92,7 +96,19 @@ def _positions_table(db: Database) -> str:
         "| Strategy | Symbol | Qty | Entry | Last | Peak | Sell if ≤ | P/L | P/L % |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
+    counts: dict[str, int] = {}
     for r in rows:
+        counts[r["strategy"]] = counts.get(r["strategy"], 0) + 1
+    for strat in [k for k, n in counts.items() if n > MAX_ROWS_PER_STRATEGY]:
+        mine = [r for r in rows if r["strategy"] == strat]
+        longs = sum(1 for r in mine if r["qty"] > 0)
+        pnl = sum((r["last_price"] - r["entry_price"]) * r["qty"] for r in mine)
+        out.append(
+            f"| {strat} | {len(mine)} positions: {longs} long, {len(mine) - longs} short | | | | | | {pnl:+.2f} | |"
+        )
+    for r in rows:
+        if counts[r["strategy"]] > MAX_ROWS_PER_STRATEGY:
+            continue
         pnl = (r["last_price"] - r["entry_price"]) * r["qty"]
         pct = (r["last_price"] / r["entry_price"] - 1) * 100 if r["entry_price"] else 0
         trig = f"{r['exit_trigger']:.2f}" if r["exit_trigger"] else "not armed"
@@ -113,9 +129,25 @@ def _when(dt: datetime, day: str) -> str:
 def _trades_table(trades, day: str) -> str:
     if not trades:
         return "No closed trades.\n"
+    counts: dict[str, int] = {}
+    for t in trades:
+        counts[t.strategy] = counts.get(t.strategy, 0) + 1
+    big = {k for k, n in counts.items() if n > MAX_ROWS_PER_STRATEGY}
+    summary = []
+    for strat in sorted(big):
+        mine = [t for t in trades if t.strategy == strat]
+        wins = sum(1 for t in mine if t.pnl > 0)
+        why = ", ".join(
+            f"{r} {sum(1 for t in mine if t.exit_reason == r)}" for r in sorted({t.exit_reason for t in mine})
+        )
+        summary.append(
+            f"| {strat} | {len(mine)} trades, {wins} won | | | | | {sum(t.pnl for t in mine):+.2f} | | {why} |"
+        )
+    trades = [t for t in trades if t.strategy not in big]
     out = [
         "| Strategy | Symbol | In | Out | Entry | Exit | P/L | P/L % | Why |",
         "|---|---|---|---|---|---|---|---|---|",
+        *summary,
     ]
     for t in trades:
         out.append(

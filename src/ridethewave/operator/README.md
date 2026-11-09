@@ -19,4 +19,4 @@ The part of the system that lets it run without someone watching.
 
 Scripts that drive it: `scripts/operator_tick.py` (every 5 min: watchdog, health check, due tasks),
 `scripts/report.py`, `scripts/alerts_check.py`, `scripts/notify_test.py` (one test push to the phone),
-`scripts/nightly.py`, `scripts/install_launchd.py`. Feature doc: docs/features/14-operator.md.
+`scripts/nightly.py`, `scripts/record_market_state.py` (15:45 ET, feature 25), `scripts/install_launchd.py`. Feature doc: docs/features/14-operator.md.

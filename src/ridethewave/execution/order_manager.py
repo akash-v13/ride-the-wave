@@ -123,7 +123,13 @@ class OrderManager:
         only because NUWE could not be shorted. Two guards now prevent that:
         1. After the cancel, read the stop's final state. If it filled, book the stop's fill and sell nothing;
            if it filled in part, sell only the rest.
-        2. Live slots (`verify_holdings`): never sell more than the broker says it holds."""
+        2. Live slots (`verify_holdings`): never sell more than the broker says it holds.
+
+        On 2026-11-06 WULF's stop was still filling when its state was read (59 of 95), so the bot asked for
+        36 of the 32 left and Alpaca refused. The position stayed marked as exiting with no order behind it,
+        so neither the strategy nor the 15:55 flatten touched it, and 32 shares sat unprotected over the
+        weekend. Now the stop is read only once it has settled, and a refused sell clears the mark so the
+        next exit signal or the flatten retries with a fresh holdings read."""
         pos = self.book.positions.get(sig.symbol)
         if pos is None or pos.exit_pending:
             return
@@ -165,13 +171,19 @@ class OrderManager:
         if qty <= 0:
             return
         cid = self._next_client_id(sig.symbol, "sell", now)
-        res = self.broker.submit_market_sell(sig.symbol, qty, cid)
+        try:
+            res = self.broker.submit_market_sell(sig.symbol, qty, cid)
+        except Exception:
+            pos.exit_pending = False  # no order is working: let the next exit signal or the flatten retry
+            raise
         self.book.pending_exits[sig.symbol] = PendingExit(sig.symbol, res.id, now, sig.reason)
         self._record(res, reason=sig.reason)
 
     def _settle_stop(self, stop_id: str) -> OrderResult | None:
         """Cancel the protective stop and return its final state (cancelled, filled or partly filled).
-        None when the broker cannot say; the caller then sells as before."""
+        Waits until the stop is terminal: a stop still ``partially_filled`` (or ``new``) after the cancel
+        is sent can keep filling, as WULF's did on 2026-11-06. None when the broker cannot say; the
+        caller then sells as before."""
         self.broker.cancel(stop_id)
         res: OrderResult | None = None
         for i in range(STOP_SETTLE_CHECKS):
@@ -180,7 +192,7 @@ class OrderManager:
             except Exception as e:  # noqa: BLE001
                 logger.warning("could not read stop {} after cancelling: {}", stop_id, e)
                 return None
-            if res.status != "pending_cancel":
+            if res.is_terminal:
                 return res
             if i < STOP_SETTLE_CHECKS - 1:
                 self._sleep(STOP_SETTLE_WAIT_S)

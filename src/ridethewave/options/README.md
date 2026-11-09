@@ -11,3 +11,6 @@ level 3).
 - `lifecycle.py`: pure rules: sizing, valuation, shadow fill prices, exits (DTE, profit target, stop).
 - `slot.py`: an options slot: one template on one underlying, at most one structure open, decided daily;
   shadow fills against live quotes or live multi-leg orders on the paper account.
+- `backtest.py`: past chains rebuilt from Alpaca's daily option bars (2024 on), replayed through `slot.py`.
+- `history_sim.py`: the bull put spread slot's rules on the S&P 500 from 1990, each leg priced from VIX
+  through a skew curve fitted on the real 2024-26 chains (docs/research/2026-11-02-put-spread-long-history.md).

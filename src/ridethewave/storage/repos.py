@@ -550,3 +550,20 @@ class StructureRepo(_Repo):
                 "SELECT * FROM structures WHERE strategy=? ORDER BY opened_at DESC LIMIT ?", (strategy, limit)
             ).fetchall()
         return self.conn.execute("SELECT * FROM structures ORDER BY opened_at DESC LIMIT ?", (limit,)).fetchall()
+
+
+class FillRepo(_Repo):
+    """Simulated fills of the daily portfolio slots, with the bid and ask standing when each was made."""
+
+    def insert_many(self, rows: list[dict]) -> None:
+        with self.conn:
+            self.conn.executemany(
+                """INSERT INTO portfolio_fills (strategy, run_id, day, ts, symbol, qty, price, last, bid, ask, target)
+                   VALUES (:strategy, :run_id, :day, :ts, :symbol, :qty, :price, :last, :bid, :ask, :target)""",
+                rows,
+            )
+
+    def for_day(self, strategy: str, day: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM portfolio_fills WHERE strategy=? AND day=? ORDER BY id", (strategy, day)
+        ).fetchall()

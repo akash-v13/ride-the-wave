@@ -14,6 +14,275 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-11-09 (evening) — Real trading costs measured; daily recordings start; a gap found in the price panel
+
+**Asked:** go ahead with the cost measurement and the daily recording.
+
+**1. What the stat-arb rule really pays to trade** (docs/research/2026-11-09-statarb-costs.md). The
+design was written down before any data was fetched.
+- **The spread.** From Alpaca's quote history on 60 volatile and 30 calm sessions: the stocks the
+  rule picks cost **10.9 bp** each way at 09:35. The backtest assumed 5. Calm sessions are nearly as
+  wide (9.7 bp), so it is the kind of stock the rule picks, not the stress.
+- **The wait.** The backtest trades at the open; the slot trades at 09:35. From minute bars on all
+  779 volatile sessions: by 09:35 the stocks it buys have fallen a further 6 bp against the ones it
+  sells. So waiting gains about 5.7 bp per cohort. It does not cost.
+- **Re-priced as the slot trades:** +11.9 bp per cohort (t 0.6), against +29.7 in the backtest.
+  About +1.7% a year on capital, not +4.3%. It is still positive in both halves, by a margin of
+  3 bp of spread. **As it trades today, the rule has no demonstrable edge.**
+- **A lead, not a result:** the opening auction has no spread. If the picks can be filled there at
+  about the backtest's price, a cohort costs about 6 bp, not 50. That needs its own test.
+- **Unchanged:** the rule, the slot and its settings.
+
+**2. Daily recordings** (docs/features/25-market-state-recording.md), from 10 November:
+- **Every simulated fill of a daily slot is stored with its bid and ask** (table `portfolio_fills`),
+  so the shadow records can be re-priced at real spreads.
+- **Borrow flags** for every active stock, and **option quotes with implied volatility** for the 254
+  stat-arb names and 14 ETFs, saved each day at 15:45 ET by the operator
+  (`data/recordings/`). Today's files were written after the close as the first day.
+- **First day's finding:** one stat-arb name (ONDS) cannot be shorted, and two (KVUE, WBD) have been
+  delisted since the list was made in September.
+
+**3. Found on the way: the price panel is missing delisted stocks**
+(docs/research/2026-11-09-panel-survivorship-gap.md).
+- **What:** Alpaca's asset list drops a stock when it is delisted. The panel was built from that
+  list, so it has delistings for 2018 to 2022 and almost none after. Twitter, Activision, VMware,
+  Splunk, Pioneer, US Steel, Hess, Discover, Juniper, Ansys and Walgreens are all absent.
+- **Size:** about 50 to 60 liquid stocks missing from 2023 on, of the 300 the stat-arb study draws
+  from each month.
+- **Meaning:** every 2017-2026 result was measured partly on survivors. By how much is not known
+  until the panel is repaired.
+- **A free repair exists:** Alpaca's corporate-actions feed lists the mergers and removals from
+  2020, and Alpaca serves those stocks' prices by symbol. Not started; it needs the owner's go-ahead
+  because it will change published numbers.
+
+**4. Repaired: three documentation files.** On 2 November a faulty helper cut `docs/decisions.md`,
+`docs/features/README.md` and `docs/research/README.md` down to their last entry. All three were
+rebuilt from the last commit plus the recorded changes, and checked line for line against what
+survived. Nine decisions entries from 2 November are back.
+
+**Checks:** 203 tests pass; a dry run of the bot is clean; the operator ran the new recording task
+by itself at 17:10 ET.
+
+**Next, waiting on the owner:** repair the panel and re-run the frozen studies; then the
+opening-auction test.
+
+## 2026-11-09 — First week of `sa_volrev`: −1.1%; a stranded live position found and fixed
+
+**Asked:** the status.
+
+**Sessions 5, 6 and 9 November ran.** The bot started and shut down on time each day. The watchdog
+restarted nothing.
+- **VIX:** 16.61 on 4 Nov, 28.18 on 5 Nov, 25.64 on 6 Nov. So `sa_volrev` added cohorts on 6 and
+  9 Nov and now holds four: those from 2, 3, 5 and 6 Nov.
+- **The dead-band fix worked.** On 5 Nov the slot made 87 fills, topping up the names in two cohorts.
+  The book now matches its targets: stocks about 64% long and 65% short against 67% and 66%. Only
+  11 targets under one share are missing.
+
+**Results** (closing marks, simulated except Wave Rider):
+
+| Slot | 4 Nov | 5 Nov | 6 Nov | 9 Nov | Capital |
+|---|---|---|---|---|---|
+| `sa_volrev` | $500,191 | $504,625 | $500,122 | **$494,729** | $500,000 |
+| `tf_etfs` | $49,412 | $49,606 | $49,967 | $49,274 | $50,000 |
+| `pm_actives` | $8,495 | $7,944 | $8,245 | $8,562 | $10,000 |
+| `vt_spy` | $9,986 | $9,543 | $9,571 | $9,728 | $10,000 |
+| `bps_spy` / `bps_qqq` | $20,211 / $20,469 | $19,961 / $19,581 | $20,018 / $19,827 | $20,265 / $20,292 | $20,000 each |
+| `cc_qqq` | $78,717 | $74,566 | $75,524 | $77,643 | $80,000 |
+
+**Live Wave Rider** (paper account):
+
+| Day | Trades | P/L | Note |
+|---|---|---|---|
+| 4 Nov | 15 | −$54.64 | |
+| 5 Nov | 0 | $0 | Down day, so the market gate kept it out |
+| 6 Nov | 11 | −$44.07 | |
+| 9 Nov | 7 | +$92.31 | Includes the WULF shares below |
+
+**Found and fixed: a live position stranded over the weekend.**
+- **6 Nov.** WULF's protective stop was still filling when the bot read it, so the bot's sell asked for
+  36 of the 32 shares left and Alpaca refused.
+- **Why it stayed stranded.** The position stayed marked as exiting with no order behind it, so
+  neither the strategy nor the 15:55 flatten touched it. The 32 shares (about $330) sat without a stop
+  until Monday's start-up reconcile adopted them. They were sold at 09:32 for +$36.58.
+- **Fix:** the stop is read only once it has settled, and a refused sell clears the mark so the bot
+  retries. Two tests; 190 pass. docs/features/07-order-execution.md. In effect from the 10 Nov start.
+
+**Reading the first `sa_volrev` week.**
+- **The result:** −1.1% in the volatile week it was built for (VIX peaked at 28).
+- **Why it says little:** the first two days carried the dead-band error, and one week is an anecdote.
+  The backtest's worst month was −5.0%, so this is well within its range. No change to the rule.
+
+**Later the same day: what stat arb needs next.** The owner asked what would improve the strategies
+and will look for outside resources. The assessment and wish list are at the top of
+docs/roadmap-advanced-strategies.md. In short:
+- **Most valuable resource:** daily stock prices before 2016, delisted stocks included, so the frozen
+  rule can be tested once on stress episodes it has never seen.
+- **Work needing nothing new:** measure real trading costs from Alpaca's quote history, start recording
+  borrow flags and option volatility, and test the sleeves as one book.
+
+## 2026-11-04 — `sa_volrev` traded both days; its second cohort was half-built, fixed
+
+**Asked:** the status of the bot.
+
+**Sessions 3 and 4 November ran cleanly.** Bot started on time both days. Every slot resumed its book.
+The watchdog found nothing to restart. No alerts.
+- **Live Wave Rider:** −$1.06 on 3 Nov (3 trades), −$54.64 on 4 Nov to 14:40 ET (15 trades, 5 winners, most
+  stopped out within minutes). Flat now.
+- **VIX closed above 20 on both days** (21.15 on Monday 2 Nov, 20.83 on Tuesday 3 Nov), so `sa_volrev`
+  opened a cohort each morning: 49 long and 50 short each.
+
+**Found and fixed: the second cohort was half-built.** The daily slot skips same-side adjustments
+smaller than 1% of capital, a rule meant to stop a few-name book from churning on rounding. For
+`sa_volrev` that is $5,000, while each name in a cohort is 0.4% ($2,000).
+- **What went wrong:** 79 names were picked on both days. Each should have gone from 0.4% to 0.8%,
+  but none was added. The ETF hedges were sized for the full book.
+- **Result on 4 Nov:** stocks held at 24% long and 22% short against targets of 40% each, while the
+  hedges were at full size (SPY −52%, XLK +44%). That left an unintended position of roughly 20% of
+  capital: short the market, long technology.
+- **Fix:** the band is now a per-slot setting (`dead_band_pct`, default 1%, unchanged for the other
+  slots), and `sa_volrev` uses 0.1% ($500). It takes effect at the next bot start (5 Nov, 06:30 ET).
+  The 09:35 decision then tops up the 79 names. Test added: 188 pass.
+- **What it means for the record:** the 4 November `sa_volrev` mark is not a clean observation of the
+  rule. 3 November (one cohort) is.
+
+**Worth watching:** the hedges are about as large as the stock book, much larger than on the backtest
+check date (9 April 2025). Most shorts are chip and AI-hardware names, which move more with XLK than
+with SPY. So the hedge buys XLK and sells SPY. The rule does this by design. It also means the 5 bp hedge cost in the
+backtest is light for weeks like this.
+
+## 2026-11-02 (evening) — Ken French's century: momentum scaled by volatility passes; reversal (stat arb's base) is gone
+
+**Asked:** start with the Ken French data, and plan statistical arbitrage.
+
+**Done:** six series fixed in advance and run over 1927-2026 (docs/research/2026-11-02-momentum-and-reversal-century.md).
+- **Momentum scaled by its own volatility** roughly doubled its Sharpe (0.51 to 0.99) and halved its
+  crashes (2009: −50% to −18%). The long-only version, closest to `pm_actives`, beat the market with an
+  information ratio of 0.83 (t 8.5), and 0.38 (t 2.0) since 2000. It passes, though it has faded since
+  2010 (0.24).
+- **Short-term reversal**, the effect stat arb trades, earned Sharpe 1.1 to 1.6 a decade until the
+  1980s. Since 2000: 0.12, large caps 0.02. A trade can cost at most 1 to 3 bp before it is gone; we
+  pay about 5.
+- **Caught on the way:** Ken French's daily reversal files re-sort every day and include yesterday's
+  bid-ask bounce (an untradable Sharpe of 3.8). Switched to the monthly files and recorded the
+  change. The parser now reads monthly files too.
+
+**Stat arb plan** (docs/roadmap-advanced-strategies.md, item 3):
+1. A diagnostic first: does a stock's own move (after removing its market and sector moves)
+   reverse over 1 to 5 days on our 2017-2026 data, from the next open? It has a kill test.
+2. The strategy only if that passes: s-scores (Avellaneda and Lee), dollar- and beta-neutral, real
+   costs and borrow.
+3. Shadow, then paper with real shorts.
+
+**Then, same evening (owner: "go ahead"): both tests run.**
+
+1. **Stat arb, stage 1** (docs/research/2026-11-02-statarb-stage1.md). Does a stock's own move,
+   after removing its market and sector moves, reverse over 1 to 5 days? Point-in-time top 300,
+   2017-2026, measured from the next open.
+   - **Always-on: the kill test fails.** At best +17 bp per 5-day round trip, never t ≥ 2 in both
+     halves, and a trade can cost at most 4.3 bp before it is gone. We pay about 5.
+   - **When VIX ≥ 20: +51 bp per round trip** (t 2.6), positive in both halves, and a trade could
+     cost up to 13 bp. Zero on calm days. It leans on 2020 (+98 bp) and the 2025 tariff drop
+     (+148 bp). It is the best of 18 looks, so it gets its own pre-registered strategy test before
+     anything is built.
+2. **Momentum with a volatility-scaled overlay** (docs/research/2026-11-02-momentum-overlay.md).
+   - **It passes.** Information ratio against SPY 0.43 (plain book 0.48), positive in both halves.
+   - **Risk is what it improves:** the worst run of losses against SPY fell from −37.6% to −19.6%,
+     and the November 2020 momentum crash from −4.6% to −0.6%.
+   - **It costs upside:** 2026 so far +29.7% instead of +74.5%.
+   - Nine years cannot prove the edge (t 1.3). The century study is the evidence.
+
+New code: `src/ridethewave/daily/residuals.py` (sector assignment, rolling betas, residuals; 4 tests).
+180 tests pass.
+
+**Then (owner: "a lot of volatility this week, can stat arb use it?"):**
+
+The volatile-market reversal was made into a rule the bot can follow and tested with costs
+(docs/research/2026-11-02-statarb-volatility-gated.md).
+- **The rule:**
+  - signal to yesterday's close;
+  - only after a VIX close of 20 or above;
+  - buy the most-fallen fifth, short the most-risen fifth, hedged;
+  - enter at the open, hold 5 sessions;
+  - 26 bp of costs.
+- **Result:** +29.7 bp per cohort after costs, positive in both halves, +4.3% a year on capital, Sharpe
+  0.48, worst drawdown −11.2%, invested 42% of the time.
+- **Thin:** t 1.5, and 2020 and the April 2025 tariff drop did most of the work.
+- **It passes the bar set in advance, so it goes to shadow as `sa_volrev` from Tuesday 3 November,
+  09:35 ET** ($500,000 simulated, nothing sent to Alpaca).
+  - VIX closed at 19.42 on Friday, so it trades only if a close this week is 20 or above.
+  - It does not trade on our forecast. It cannot trade new listings.
+- The live rebuild of cohorts picked exactly the same stocks as the backtest on 9 April 2025.
+- Dry run clean; the 09:35 decision takes about 7 seconds. 187 tests pass.
+- Feature page: docs/features/24-statarb-volatility-gated.md.
+
+**Next:** watch `sa_volrev` this week. Then a shadow slot for the momentum overlay.
+
+## 2026-11-02 — New direction started: four slots retired, trend sleeve built, the put spread fails a 36-year test
+
+**The last three sessions (29 Oct, 30 Oct, 2 Nov) ran cleanly on the Mac mini.**
+- Every start was on time, including Monday, the first day after the clocks went back. No errors,
+  no alerts.
+- The new sell guard fired six times, all on shadow ORB trades: each time it booked the protective
+  stop's fill and sent no second sell.
+- **Live Wave Rider: +$42 on 9 trades.** Friday had no trades: SPY stayed below zero all morning, so
+  the market gate blocked all 197 candidates. Monday made +$75, mostly from two leveraged funds (TSLG,
+  SOXS) held to the 60-minute limit.
+- The market fell over the three sessions (SPY −2.6%, QQQ −6.1%, chips worst). The shadow momentum
+  book fell 8.6% (INTC −35%, MRVL −32%). The put spreads lost less than half a percent.
+
+**What the owner chose** (all five of the 29 October questions):
+1. **Start with trend following plus a long-history test of the put spread.**
+2. **Risk budget:** a 10% volatility target, a 15% drawdown limit, and defined-risk option selling
+   only. These are defaults, and see finding 4 below.
+3. **Outside data allowed:** Ken French, Cboe, FRED.
+4. **Which of the 151 strategies worked before:** still to answer.
+5. **Retire the failed intraday shadow slots.**
+
+**Done today.**
+- **Retired** `wave_rider_15m`, `orb`, `xs_overnight` and `xs_combo` (`enabled: false`). Their code
+  and history are kept. A dry run confirmed the bot starts with Wave Rider as its only intraday slot.
+  The live slot's capital does not change, because only live weights are pooled.
+- **Outside histories** (feature 23): `scripts/download_external.py` fetches ten datasets into
+  `data/external/`. US stocks go back to 1926, the S&P 500 to 1975, VIX to 1990, Treasury yields to
+  1962.
+- **Trend following** (`trend_following`): long or short across 21 ETFs in four classes, each class
+  an equal share of risk, the book at 10% volatility. Tested on the ETFs (2017-2026) and on a century
+  of stocks and bonds. From tomorrow it runs as the shadow slot `tf_etfs`.
+- **A long-history test of the put spread**, priced from S&P 500 and VIX history with a skew curve
+  fitted to 55,360 real SPY put prices.
+- **A combination study**: the three sleeves at equal risk and a 10% target, 1990-2026.
+- **Fixed**: daily portfolio slots ignored `rebalance_days`. They now honour it.
+- 175 tests pass. Ruff is clean.
+
+**What the tests found.**
+1. **The put spread fails.**
+   - Over 1990-2026: 2.4% a year above T-bills (Sharpe 0.25), a −52% drawdown at its current size.
+   - It lost as much as the market in 2000-02. The volatility gate helps in fast crashes, not slow
+     declines.
+   - It is mostly a leveraged bet that stocks stay calm. Not promoted.
+   - docs/research/2026-11-02-put-spread-long-history.md
+2. **Trend following is insurance, not an alpha.**
+   - It earned the T-bill rate over 2017-2026, and a Sharpe of 0.37 over a century.
+   - But it made money in the stock market's worst months: 1929-32 +63%, 1973-74 +45%, 2008-09 +13%,
+     2022 +26% on the ETFs.
+   - It fails in sell-offs that reverse within weeks (April 2025) and in the year after a big trend
+     year (2023: −11.7%).
+   - docs/research/2026-11-02-trend-following.md
+3. **Trend does not rescue the put spread.** Together they still drew down 34% at 10% volatility.
+   Trend did nothing in 2000-02, where the put spread lost slowly.
+4. **The risk budget's two numbers conflict.** Over 1990-2026, every book holding stock risk drew
+   down 26% to 39% at 10% volatility. To stay inside 15% it needed about 4% to 6.5%.
+5. **The simplest sleeve did best:** the stock market held at a constant 10% volatility, with a
+   Sharpe of 0.63 against 0.51 for buy and hold. That is what `vt_spy` does.
+
+**Decisions for the owner.**
+- Risk budget: about 6% volatility with a 15% drawdown, or 10% with about 25-30%?
+- The put-spread slots: retire them, or observe at 5% risk per spread (drawdown −11.7% in the test)?
+- Which *151 Trading Strategies* worked for you before?
+
+**Next:** momentum on a century of data. It is our only stock-ranking lead, and the first candidate
+that could be an alpha rather than a premium (docs/roadmap-advanced-strategies.md).
+
 ## 2026-10-29 (evening) — Close report fixed; a backup for the morning start
 
 **The 16:15 close report was out of date.** It ran before the evening fixes, so it showed the QQQ
