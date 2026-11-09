@@ -51,3 +51,13 @@ def test_long_short_gap_hedges_market_and_sector_and_skips_unpriced_names():
     assert gap == pytest.approx(0.005) and priced == 3
     assert long_short_gap(move, ["L1"], ["NOPRICE"], b_m, b_s, sectors) == (None, 1)
     assert long_short_gap(move.drop("SPY"), ["L1"], ["S1"], b_m, b_s, sectors) == (None, 0)
+
+
+def test_auction_price_is_the_largest_opening_print():
+    from ridethewave.daily.costs import auction_price
+
+    # an odd-lot print on another venue, a small opening elsewhere, then the listing exchange's cross
+    prints = [{"p": 8.54, "s": 1, "c": "Q"}, {"p": 8.5, "s": 1000, "c": "O"}, {"p": 8.51, "s": 1888347, "c": "Q"}]
+    assert auction_price(prints) == 8.51
+    assert auction_price([]) is None and auction_price(None) is None
+    assert auction_price([{"p": None, "s": 5}, {"p": 3.0, "s": 0}]) is None  # no usable print

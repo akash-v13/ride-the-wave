@@ -7,6 +7,9 @@ about 09:35 (docs/research/2026-11-09-statarb-costs.md). Two things decide wheth
 - **The wait.** Between the open and 09:35 the picks may already have moved. ``open_to_later``
   reads both prices from minute bars, and ``long_short_gap`` turns them into the part of the
   long-minus-short spread that the wait gives up or gains.
+- **The auction.** An order sent for the open pays no spread; it is filled at the opening auction
+  price, which ``auction_price`` reads from the day's opening prints
+  (docs/research/2026-11-09-statarb-auction-fills.md).
 """
 
 from __future__ import annotations
@@ -29,6 +32,15 @@ def half_spread_bp(ts_ns: np.ndarray, bid: np.ndarray, ask: np.ndarray, end_ns: 
         return None
     half = (ask[ok] - bid[ok]) / (ask[ok] + bid[ok]) * 1e4  # (ask - bid) / 2, over the mid (ask + bid) / 2
     return float(np.average(half, weights=stood[ok]))
+
+
+def auction_price(prints: list[dict] | None) -> float | None:
+    """A stock's opening auction price from one day's opening prints (Alpaca's auction history: each
+    print has a price ``p`` and a size ``s``). The largest print is the cross on the stock's listing
+    exchange, which is where an order sent for the open is filled; the smaller ones are other venues'
+    own openings. None when there was no opening print."""
+    best = max((x for x in prints or [] if x.get("p") and x.get("s")), key=lambda x: x["s"], default=None)
+    return float(best["p"]) if best else None
 
 
 def open_to_later(bars: pd.DataFrame, later_minute: int = 5) -> float | None:

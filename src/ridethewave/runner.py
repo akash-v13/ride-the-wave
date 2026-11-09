@@ -22,7 +22,7 @@ from ridethewave.daily.data import Panel
 from ridethewave.daily.strategies import build_daily
 from ridethewave.daily.universe import resolve as resolve_daily_universe
 from ridethewave.data.bars import BarAggregator
-from ridethewave.data.market_data import DailyBars, HistoricalBars, SnapshotPoller
+from ridethewave.data.market_data import DailyBars, HistoricalBars, SnapshotPoller, opening_auctions
 from ridethewave.data.universe import UniverseBuilder
 from ridethewave.engine import TradingEngine
 from ridethewave.execution import OrderManager, PositionBook
@@ -419,7 +419,10 @@ class BotRunner:
             logger.warning("[{}] no daily history; decision skipped", ps.spec.id)
             ps.skip(today, "no daily history")
             return
-        fills = ps.decide(panel, prices, now, ps.universe, self._external_series(ps), quotes)
+        fills_at = sizes_at = None
+        if ps.spec.fill_at == "open_auction":
+            fills_at, sizes_at = self._open_fills(ps, snaps, d)
+        fills = ps.decide(panel, prices, now, ps.universe, self._external_series(ps), quotes, fills_at, sizes_at)
         for f in fills:
             logger.info(
                 "[{}] fill {} {:+.0f} @ {:.2f} (target {:+.1%})",
@@ -429,6 +432,34 @@ class BotRunner:
                 f["price"],
                 f["target"],
             )
+
+    def _open_fills(self, ps: DailySlot, snaps: dict, day) -> tuple[dict[str, tuple[float, str]], dict[str, float]]:
+        """Where a slot that fills at the opening auction is priced today, and what it sizes on.
+
+        - **Fill price:** the stock's opening auction price. When Alpaca has no print for it (a late
+          open, or a gap in its auction history), the day's first trade, which is what the backtest
+          used and which matches the auction on average. Failing both, the slot's usual last trade.
+        - **Size:** yesterday's close, all that an order sent before the open could know."""
+        auctions = opening_auctions(self.clients.data, snaps, day)
+        fills_at: dict[str, tuple[float, str]] = {}
+        sizes_at: dict[str, float] = {}
+        for sym, r in snaps.items():
+            bar, prev = r.daily_bar, r.prev_daily_bar
+            if sym in auctions:
+                fills_at[sym] = (auctions[sym], "auction")
+            elif bar is not None and bar.open > 0 and bar.ts.astimezone(ET).date() == day:
+                fills_at[sym] = (bar.open, "open")
+            if prev is not None and prev.close > 0:
+                sizes_at[sym] = prev.close
+        kinds = [b for _, b in fills_at.values()]
+        logger.info(
+            "[{}] fills priced at the open: {} at the auction price, {} at the day's first trade, {} at the last trade",
+            ps.spec.id,
+            kinds.count("auction"),
+            kinds.count("open"),
+            len(snaps) - len(kinds),
+        )
+        return fills_at, sizes_at
 
     # ------------------------------------------------------------------ options slots
     def _build_options(self, today: str) -> None:

@@ -306,9 +306,9 @@ r_i = a + \beta_m r_{SPY} + \beta_s (r_{sector} - r_{SPY}) + e_i, \qquad s_i = \
 - +4.3% a year on capital, Sharpe 0.48, worst drawdown −11.2%, invested 42% of the time;
 - 2020 (+33.8%) and 2025 (+14.8%) did most of the work, and the slow 2022 decline earned nothing.
 
-It is the mirror of trend following. **Status:** shadow slot `sa_volrev` from 3 November 2026, $500,000 simulated.
+It is the mirror of trend following. **Status:** shadow slot `sa_volrev` from 3 November 2026, $500,000 simulated. From 10 November its fills are booked at each stock's opening auction price plus 1 bp, where the same picks earn +40.6 bp per cohort (t 2.0) against +7.5 bp with market orders at 09:35 (docs/research/2026-11-09-statarb-auction-fills.md).
 
-**Costs, measured 9 November** (docs/research/2026-11-09-statarb-costs.md). The stocks the rule picks cost 10.9 bp each way at 09:35, more than twice the 5 bp the backtest assumed. Re-priced as the slot trades, a cohort earns +11.9 bp (t 0.6), about +1.7% a year: no demonstrable edge. The opening auction has no spread, so filling there is the next thing to test. The backtest's price panel also lacks stocks delisted since late 2022 (docs/research/2026-11-09-panel-survivorship-gap.md).
+**Costs, measured 9 November** (docs/research/2026-11-09-statarb-costs.md). The stocks the rule picks cost 10.9 bp each way at 09:35, more than twice the 5 bp the backtest assumed. Re-priced as the slot trades, a cohort earns +11.9 bp (t 0.6), about +1.7% a year: no demonstrable edge. The opening auction has no spread, so filling there is the next thing to test. The backtest's price panel also lacked delisted stocks; it was repaired the same day, and on the repaired panel the rule earns +24.9 bp per cohort at assumed costs and +7.5 bp (t 0.4) as it trades (docs/research/2026-11-09-panel-survivorship-gap.md, section 5).
 
 ## 5. Research protocol: how a strategy earns its place
 
@@ -501,6 +501,8 @@ Six experiments have been run since 17 September 2026. One configuration is thin
 | 2 Nov | Stat arb in volatile markets as a tradable rule | Same universe, 779 gated sessions, 2 configurations | +29.7 bp per cohort after 26 bp costs (t 1.5), both halves positive, +4.3% a year, Sharpe 0.48, drawdown −11.2%; 2020 +33.8% and 2025 +14.8% did most of it | Shadow slot `sa_volrev` from 3 Nov, idle while VIX < 20 |
 | 9 Nov | What the stat-arb rule really pays to trade | Quote history on 60 volatile and 30 calm sessions; minute bars on all 779 volatile sessions | The picks' half-spread at 09:35 is 10.9 bp, not the 5 assumed; waiting from the open to 09:35 gains 5.7 bp. Re-priced: +11.9 bp per cohort (t 0.6), about +1.7% a year | No demonstrable edge as the slot trades; rule unchanged; opening-auction fills to be tested |
 | 9 Nov | Check of the price panel behind every 2017-2026 study | 12 well-known delisted stocks; delistings counted by year | All 12 absent; the panel has delistings for 2018-2022 only, about 50 to 60 liquid stocks missing from 2023 on | Results on it carry survivorship bias after 2022; a free repair is proposed |
+| 9 Nov | The price panel repaired and every study re-run unchanged | 2,708 delisted stocks added (names from Massive's list, prices from Alpaca); up to 8% of a year's top 300 had been missing | Stat-arb rule +24.9 bp per cohort at assumed costs (was +29.7), +7.5 bp (t 0.4) as it trades; momentum 0.49 against its universe (was 0.51); overlay 0.39 (was 0.43) | Every number fell a little, no verdict changed; the repaired numbers are the ones to quote |
+| 9 Nov | The stat-arb rule filled at the opening auction | Alpaca's auction prints for 92,081 picks on 779 volatile sessions | The backtest's open matches the auction long against short (0.0 and −0.2 bp). At the auction: +40.6 bp per cohort (t 2.0), halves +47.7 / +33.7, against +7.5 bp with market orders at 09:35 | Passes; thin (21 looks, two years carry it). From 10 November the shadow slot books its fills at the auction price |
 
 ### The base strategy's exits, from the base run
 

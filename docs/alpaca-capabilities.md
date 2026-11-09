@@ -15,7 +15,7 @@ alpaca-py 0.44. "Used" means the running bot depends on it today.
 | Crypto | active; 73 pairs (BTC/USD, ETH/USD, ...), 24/7 | no |
 | Extended hours | limit orders 04:00 to 20:00 ET with `extended_hours=true` | no |
 | Pattern-day-trader rule | not a constraint above $25k equity | n/a |
-| Delisted stocks | 19,174 inactive symbols listed, full price history served. **Corrected 2026-11-09:** the list is incomplete. A stock delisted now drops out of it, and delistings since late 2022 are mostly absent; prices are still served by symbol | yes, for the price panel, which therefore lacks those stocks (docs/research/2026-11-09-panel-survivorship-gap.md) |
+| Delisted stocks | 19,174 inactive symbols listed, full price history served. **Corrected 2026-11-09:** the list is incomplete. A stock delisted now drops out of it, and delistings since late 2022 are mostly absent; prices are still served by symbol | yes, for the price panel. The missing stocks were added by symbol on 2026-11-09 (docs/research/2026-11-09-panel-survivorship-gap.md, section 5) |
 
 ## Market data (Algo Trader Plus)
 

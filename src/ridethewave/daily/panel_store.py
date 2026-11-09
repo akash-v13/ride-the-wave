@@ -1,5 +1,12 @@
-"""The survivorship-free daily panel on disk (data/daily_panel/, written by scripts/download_universe_history.py):
-loading it and building point-in-time monthly universes from it."""
+"""The daily price panel on disk (data/daily_panel/): loading it and building point-in-time monthly
+universes from it.
+
+Two sets of files, read together:
+- ``bars_NNNN.parquet``: every stock in Alpaca's asset list on 23 September 2026
+  (scripts/download_universe_history.py). That list leaves out most delisted stocks.
+- ``bars_delisted_NNNN.parquet``: 2,708 delisted stocks added on 9 November 2026
+  (scripts/repair_daily_panel.py), named by Massive's list of delisted tickers and priced by Alpaca.
+docs/research/2026-11-09-panel-survivorship-gap.md."""
 
 from __future__ import annotations
 

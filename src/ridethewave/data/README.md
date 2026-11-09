@@ -8,5 +8,6 @@ Getting prices into the bot.
 - `bars.py`: `Bar` model and `BarAggregator`, which turns snapshot ticks into completed one-minute bars and keeps a rolling window per symbol.
 - `pit_universe.py`: point-in-time universe for backtests, ranked by trailing dollar volume from cached daily bars.
 - `resample.py`: `Resampler`, rolls completed 1-minute bars into N-minute bars per symbol, anchored at 09:30 ET; used per strategy by the engine.
+- `delistings.py`: which stocks stopped trading and when (2026-11-09): Massive's list of delisted tickers read once as a backfill, our own record from two days of saved asset lists (`left_the_list`), and a check that keeps a ticker change from being counted as a second company.
 - `recordings.py`: the daily recordings of borrow flags and option quotes (feature 25): which monthly expiries, one row per contract as the feed sent it, and day files that are written whole and never replaced.
 - `external.py`: free outside histories for research (Ken French factors from 1926, Cboe S&P 500 / VIX / option-strategy indexes, FRED Treasury yields and T-bills): dataset registry, download, parsers, and derived series (US market total return, a 10-year Treasury rebuilt from its yield, cash). The bot never trades on these. (feature 23)

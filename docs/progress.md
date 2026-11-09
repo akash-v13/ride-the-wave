@@ -14,6 +14,87 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
+
+**Asked:** go ahead with the opening-auction test.
+
+**The question.** With market orders at 09:35 the rule pays the spread four times per cohort and
+nets +7.5 bp. The opening auction crosses every stock at one price with no spread. What would the
+rule earn if every trade were filled there? The design was written down first
+(docs/research/2026-11-09-statarb-auction-fills.md).
+
+**What was measured.** Alpaca keeps a history of auction prints. For all 92,081 picks on the 779
+volatile sessions, the auction price was compared with the open the backtest used.
+- **Stock by stock they often differ** (40% of the time, by 9 bp on average).
+- **Long against short they cancel:** 0.0 bp at entry and −0.2 bp at exit per cohort. So the
+  backtest's prices were fair for an auction fill.
+
+**Result, per cohort:**
+
+| | Market orders at 09:35 | At the opening auction |
+|---|---|---|
+| Cost | 49 bp | 10 bp |
+| Net | +7.5 bp (t 0.4) | **+40.6 bp (t 2.0)** |
+| Halves | +14.0 / +1.4 | +47.7 / +33.7 |
+
+About +5.9% a year on capital. It passes the test set in advance.
+
+**Why it is still thin.**
+- t 2.0 after 21 looks at one decade; 2020 and 2025 carry it, and 2019 and 2021 lost.
+- From 2022 Alpaca's history lacks the print for a quarter of New York Stock Exchange stocks.
+- "1 bp a trade" and "our order is in the auction" are assumptions a paper account cannot prove.
+
+**Approved by the owner and done the same night:** from 10 November the shadow slot books each fill at
+that stock's opening auction price plus 1 bp, sized on yesterday's close. The picks do not change. A
+dry run priced 264 of 266 symbols at their auction price. The slot's record changes basis on that day.
+209 tests.
+
+**The owner's long-term target:** a Sharpe ratio of 1.4, reached by hunting for signals that repeat
+under stated conditions, each used only when its conditions hold (docs/decisions.md).
+
+**Shortlist report written:** docs/strategies/2026-11-09-signal-shortlist.md. Six candidates, none
+tested yet, with every formula, a worked example as questions and answers, and what 1.4 asks for:
+about four unrelated signals as good as the auction-priced stat-arb rule (Sharpe about 0.7).
+
+## 2026-11-09 (night) — The price panel is repaired; every study re-run
+
+**Asked:** start the repair, using the owner's Massive key. Keep Alpaca as the primary source, limit
+other sources, and build records in-house where we can.
+
+**How the sources are used.**
+- **Massive (formerly Polygon.io), once.** The owner's key is on the free plan: two years of prices and
+  5 requests a minute, but its list of delisted stocks back to 2003 is not restricted. That list was
+  downloaded once into `data/reference/`. Nothing calls Massive again.
+- **Alpaca for every price.** Each missing stock was asked for by its old symbol.
+- **In-house from now on.** Alpaca's asset list is saved daily since today, and a stock that is in one
+  day's file and not the next has been delisted.
+
+**What was added:** 2,708 delisted stocks. Another 1,235 listed tickers were only old names of
+companies already held (FB is META), and were left out. Up to 8% of a year's 300 most-traded stocks
+had been missing, most in the early years.
+
+**Every study re-run unchanged** (docs/research/2026-11-09-panel-survivorship-gap.md, section 5):
+
+| Study | Before | After |
+|---|---|---|
+| Stat-arb rule, at the assumed 5 bp cost | +29.7 bp per cohort (t 1.5) | +24.9 bp (t 1.2) |
+| Stat-arb rule, as the slot trades | +11.9 bp (t 0.6) | **+7.5 bp (t 0.4)** |
+| Momentum against its universe | 0.51 | 0.49 |
+| Momentum with the overlay, against SPY | 0.43 | 0.39 |
+
+- **Every number fell a little; no verdict changed.**
+- **The stat-arb rule has no edge as it trades:** +7.5 bp per cohort, and +1.4 bp in the second half.
+- **Momentum barely moved** and is still the best lead.
+- **Mostly takeovers were missing, not collapses.**
+
+**Still not covered:** 351 tickers Alpaca had no prices for; what a stock was worth after its last
+trading day; and the list is one vendor's, not checked against a second.
+
+**Checks:** 206 tests pass. The old results are kept in `data/research/pre-repair-2026-11-09/`.
+
+**Next, for the owner to choose:** test opening-auction fills for the stat-arb rule; a shadow slot for
+the momentum overlay; whether one month of Massive's 20-year plan is worth it to test before 2016.
+
 ## 2026-11-09 (evening) — Real trading costs measured; daily recordings start; a gap found in the price panel
 
 **Asked:** go ahead with the cost measurement and the daily recording.

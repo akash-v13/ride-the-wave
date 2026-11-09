@@ -41,6 +41,8 @@ portfolios:
     max_gross: 3.0
     weight: 50.0              # $500,000 simulated: about 60 names a side need room for whole shares
     dead_band_pct: 0.1        # skip adjustments under $500 (the 1% default would skip every add)
+    fill_at: open_auction     # since 10 November: fills at each stock's opening auction price
+    slippage_bps: 1.0         # the allowance on top of the auction price
     params: {}                # defaults: vix_gate 20, k 5, hold 5, fraction 0.2, side 0.2,
                               # decide_at_open true, market SPY, the 11 sector ETFs
 ```
@@ -81,15 +83,37 @@ saved copy. The strategy needs yesterday's close:
 
 **The fix.** The band is now a per-slot setting (`dead_band_pct`), and this slot uses 0.1%. The 4 November mark is not a clean observation; 3 November is.
 
+## Fills at the opening auction, from 10 November 2026
+
+**Why.** The stocks this rule picks cost about 11 bp each way to trade with a market order at 09:35.
+The opening auction crosses each stock at one price with no spread. Priced there, the same picks
+earn +40.6 bp per cohort, against +7.5 bp at 09:35
+(docs/research/2026-11-09-statarb-auction-fills.md). The owner approved the change on 9 November.
+
+**What the slot does now.** The picks are unchanged. Each fill is booked:
+- **at that stock's opening auction price,** from Alpaca's auction prints, plus 1 bp;
+- **in a number of shares set from yesterday's close,** which is all an order sent before the open
+  could know;
+- **at the day's first trade** when Alpaca has no auction print for the stock, and at the last
+  trade when it has neither. The log counts each kind every day, and the fill record says which was
+  used (`basis` in `portfolio_fills`).
+
+**The decision still runs at 09:35.** It uses only yesterday's prices and yesterday's VIX, so the
+picks are the same as a decision made before the open. Running it at 09:35 lets the slot read the
+auction prices that have just printed. A live version would send its orders before 09:28 ET.
+
+**The record changes basis on 10 November.** Fills up to 9 November were booked at 09:35 plus 5 bp.
+
 ## Measured on 9 November 2026: costs and the universe
 
-- **Costs.** The slot charges itself 5 bp a trade. Measured from quotes, its picks cost 10.9 bp at 09:35. Re-priced, the backtest's +29.7 bp per cohort becomes +11.9 bp (t 0.6). docs/research/2026-11-09-statarb-costs.md.
+- **Costs.** The slot charges itself 5 bp a trade. Measured from quotes, its picks cost 10.9 bp at 09:35. Re-priced on the repaired price panel, the backtest's +29.7 bp per cohort becomes +7.5 bp (t 0.4). docs/research/2026-11-09-statarb-costs.md, section 6.
+- **At the opening auction** the same picks would earn +40.6 bp per cohort (t 2.0), because no spread is paid there. Changing the slot to book its fills at the auction price is proposed, not done. docs/research/2026-11-09-statarb-auction-fills.md.
 - **Fill quotes.** From 10 November each fill is stored with its bid and ask (feature 25), so the slot's record can be re-priced exactly.
 - **The universe file is ageing.** Of its 254 names, KVUE and WBD have been delisted since September. They cannot be picked, because their prices have stopped. ONDS cannot be shorted, and the slot does not check that.
 
 ## Limits
 
-- **Shadow.** Fills are simulated at the 09:35 price plus 5 bp. No borrow is charged in the slot (the
+- **Shadow.** Fills are simulated, at the opening auction price plus 1 bp since 10 November (at the 09:35 price plus 5 bp before). Whether a real order would have been part of each auction cannot be shown on a paper account. No borrow is charged in the slot (the
   backtest charged 0.5% a year), and short availability is not checked.
 - **Hedges are set once a day.** In a crash, when stocks suddenly move more with the market, some
   market exposure is left until the next morning.

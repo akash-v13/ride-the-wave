@@ -185,6 +185,11 @@ class PortfolioSpec(_Strict):
     # same-side adjustments below this % of capital are skipped; books of many small names need it
     # well below their position size (sa_volrev: 0.1, since 1% skipped every second cohort's add)
     dead_band_pct: float = Field(1.0, ge=0)
+    # Where a simulated fill is priced. "last": the last trade at the decision, plus slippage_bps.
+    # "open_auction": that day's opening auction price, where an order sent before the open is filled
+    # and no spread is paid (docs/research/2026-11-09-statarb-auction-fills.md); slippage_bps is then
+    # the allowance on top. Only for strategies that decide on yesterday's data.
+    fill_at: Literal["last", "open_auction"] = "last"
     params: dict = Field(default_factory=dict)
 
 
@@ -301,6 +306,9 @@ class Secrets(BaseSettings):
     # ntfy topic for phone alerts (operator/notify.py). Anyone who knows the topic can read the alerts, so it
     # is treated as a secret. None or blank = no phone push.
     ntfy_topic: str | None = None
+    # Massive (formerly Polygon.io): used once to backfill the list of delisted stocks (data/delistings.py).
+    # The bot never needs it. None or blank = that backfill cannot run.
+    massive_api_key: str | None = None
 
     @field_validator("alpaca_paper")
     @classmethod

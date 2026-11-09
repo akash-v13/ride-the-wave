@@ -26,7 +26,9 @@ names lead, a 1-share difference from price drift is inside the dead band and no
 
 **Settings.** `portfolios:` list with `id`, `kind` (daily registry name), `universe` (named list,
 comma-separated symbols, or `scan` for the bot's own universe with funds removed), `weight`,
-`rebalance_days`, `decision_time`, `slippage_bps`, `max_gross`, `dead_band_pct`, `params`. Ids share the same space
+`rebalance_days`, `decision_time`, `slippage_bps`, `max_gross`, `dead_band_pct`, `fill_at`, `params`.
+`fill_at: open_auction` (default `last`) books each fill at the stock's opening auction price and sizes
+it on yesterday's close; it is only for strategies that decide on yesterday's data (feature 24). Ids share the same space
 as `strategies:` ids.
 
 **How to check.** `uv run python scripts/run_bot.py --dry-run` prints each portfolio's targets as of
