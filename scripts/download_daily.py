@@ -17,6 +17,7 @@ from loguru import logger
 
 from ridethewave.clients import make_clients
 from ridethewave.config import load_secrets, load_settings
+from ridethewave.daily.universe import TREND_ETFS_21
 from ridethewave.data.market_data import DailyBars
 from ridethewave.storage import Database
 
@@ -50,6 +51,7 @@ UNIVERSES: dict[str, list[str]] = {
     "broad_and_defensive": ["SPY", "QQQ", "IWM", "IEF", "TLT", "GLD", "SHY", "BIL"],
 }
 UNIVERSES["traderpro"] = sorted({s for lst in UNIVERSES.values() for s in lst})
+UNIVERSES["trend_etfs_21"] = TREND_ETFS_21  # the trend-following sleeve (2026-11-02), not part of TraderPro
 
 
 def main() -> int:

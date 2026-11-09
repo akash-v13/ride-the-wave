@@ -182,6 +182,9 @@ class PortfolioSpec(_Strict):
     decision_time: time = time(15, 50)
     slippage_bps: float = Field(5.0, ge=0)
     max_gross: float = Field(1.0, gt=0, le=3)
+    # same-side adjustments below this % of capital are skipped; books of many small names need it
+    # well below their position size (sa_volrev: 0.1, since 1% skipped every second cohort's add)
+    dead_band_pct: float = Field(1.0, ge=0)
     params: dict = Field(default_factory=dict)
 
 

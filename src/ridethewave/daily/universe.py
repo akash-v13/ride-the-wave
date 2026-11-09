@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
 from ridethewave.daily.data import Panel
+from ridethewave.daily.strategies import TREND_CLASSES
 
 # TraderPro's test universe (its database rows): 20 mega caps with LLY, not BRK.B as in its code.
 MEGA_CAPS_20 = [
@@ -15,18 +17,27 @@ MEGA_CAPS_20 = [
 ]  # fmt: skip
 SECTOR_ETFS_11 = ["XLK", "XLF", "XLV", "XLY", "XLP", "XLE", "XLI", "XLB", "XLRE", "XLU", "XLC"]
 MULTI_ASSET_8 = ["SPY", "EFA", "EEM", "TLT", "IEF", "GLD", "DBC", "VNQ"]
+TREND_ETFS_21 = list(TREND_CLASSES)  # the trend-following sleeve's markets, by class in strategies.py
 NAMED: dict[str, list[str]] = {
     "mega_caps_20": MEGA_CAPS_20,
     "sector_etfs_11": SECTOR_ETFS_11,
     "multi_asset_8": MULTI_ASSET_8,
+    "trend_etfs_21": TREND_ETFS_21,
     "spy": ["SPY"],
     "qqq": ["QQQ"],
 }
 
 
 def resolve(name_or_symbols: str) -> list[str]:
+    """A named universe, ``file:<path>`` (comma- or line-separated symbols, path from the project root),
+    or comma-separated symbols."""
     if name_or_symbols in NAMED:
         return list(NAMED[name_or_symbols])
+    if name_or_symbols.startswith("file:"):
+        path = Path(name_or_symbols[5:])
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[3] / path
+        name_or_symbols = path.read_text().replace("\n", ",")
     return [s.strip().upper() for s in name_or_symbols.split(",") if s.strip()]
 
 

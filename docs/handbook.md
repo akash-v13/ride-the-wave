@@ -81,6 +81,7 @@ All prices come from Alpaca on the Algo Trader Plus plan ($99 a month, subscribe
 | Daily bars | Same fields | From 2016 | Point-in-time universe ranking |
 | Screener | Top 100 most active by volume | Now | Live universe |
 | Assets | Tradable flag, exchange, fractionable | Now | Universe filter |
+| Daily recordings (since 9 November 2026) | Each simulated fill's bid and ask; every stock's shortable and easy-to-borrow flags; option quotes and implied volatility near the money for the stat-arb universe | Builds up from 9 November 2026 | Re-pricing shadow records at real spreads; later tests of borrow limits and option-implied signals |
 | News (not yet wired) | Headlines with symbols and timestamps | Rolling | Sentiment filter via Jev, later |
 
 **Bars and ticks.** Live, a bar is treated as complete when its start minute is older than the current minute; a minute with no trades produces no bar. The aggregator keeps a rolling window of 420 bars per symbol. Every request for historical bars is served from the SQLite cache when the range is already there, otherwise downloaded once and cached (about 1.6 seconds for 50 symbols for a full day). Two traps learned the hard way: the API's `limit` is a hard cap on the total returned, not a page size, so we always pass none and let the client paginate; and the API's `end` is inclusive while our cache is exclusive, so one second is trimmed.
@@ -104,6 +105,13 @@ All prices come from Alpaca on the Algo Trader Plus plan ($99 a month, subscribe
 | Minutes since open, streak length, streak gain | Timing and trigger strength |
 
 **Live feature recording.** From 22 September every paper session writes the same rows for every universe stock on the live feed and labels them after the close, so the classifier can be trained and checked on the data the bot actually trades. Export with `scripts/export_live_features.py`.
+
+**Outside histories for research (from 2 November 2026).** Alpaca's history starts in 2016, a decade that mostly rewarded holding US stocks. To judge strategies through 1929, the 1970s, 1987, 2000-02 and 2008, three free public sources are used for research only; the bot never trades on them:
+- **Ken French's data library:** daily US stock market, size, value and momentum factor returns from July 1926.
+- **Cboe:** the S&P 500 from 1975, VIX from 1990, and its option-strategy benchmark indexes (PutWrite, BuyWrite, iron condor, 5% put protection).
+- **FRED:** the 10-year Treasury yield from 1962 and the 3-month T-bill from 1954.
+
+`scripts/download_external.py` fetches them into `data/external/`. `ridethewave.data.external` parses them and builds a total-return stock market, a 10-year Treasury rebuilt from its yield, and cash.
 
 ## 4. Strategy catalogue
 
@@ -185,7 +193,7 @@ The Wave Rider trigger counted on 15-minute bars shows what the 1-minute version
 
 **Example.** "Nvidia raises full-year guidance on data-center demand" scored P(positive) 0.85, category earnings or guidance with confidence 1.0, materiality 2.0; "5 tech stocks to watch this week" scored P(stale) 0.87 and materiality 0.04. **Evidence** (21,081 pairs, June to September 2026, $0.85 of API calls): Jev classifies consistently, but fresh positive news is followed by +0.6 bp at 180 minutes and −7 bp to the close, with 2% already in the price; streak entries with fresh positive news did worse (profit factor 0.74 against 0.88). Negative and legal news drift lower on both halves (−16 and −51 bp at 180 minutes). Decision: no news confirmer; a down-or-legal exclusion is cheap but changes little; daily headlines keep being scored so the analyst-note and post-earnings pockets can be re-tested with more data.
 
-### 4.7 Wave Rider on 15-minute bars (shadow, observation only)
+### 4.7 Wave Rider on 15-minute bars (retired 2 November 2026)
 
 **Idea.** The same rules as 4.1 on 15-minute bars, where the diagnostic found the only streak-level signal. The engine rolls 1-minute bars into 15-minute buckets per strategy, anchored at 09:30 ET; ticks still drive exits. Streak 3, gain ≥ 1%, entries 09:30 to 11:30, hold up to 180 minutes, floor 0.5%, trail 1%, stop 2%, market gate on.
 
@@ -195,7 +203,7 @@ The Wave Rider trigger counted on 15-minute bars shows what the 1-minute version
 
 **Example.** Closes of the 09:30, 09:45 and 10:00 buckets at 100.10, 100.60 and 101.30 (three rising, +1.2%): buy at the 10:15 bar's first minute; hold up to 13:15; stop at 99.27; the wave exit arms once the peak is 1.5% above entry. **Evidence** (June to September 2026): without filters profit factor 0.89 on 468 trades; with the market gate 1.00 on 122 trades, break-even. Timeouts win 93% of the time at +1.2%; stops lose 1.9% each because they fill on gaps. Runs in shadow as observation only.
 
-### 4.8 Opening-range breakout on stocks in play (shadow, observation only)
+### 4.8 Opening-range breakout on stocks in play (retired 2 November 2026)
 
 **Idea** (Zarattini, Aziz and Barbon, 2024, long side only). A stock whose first 15 minutes trade at least three times their normal volume is in play; buy the first close above that range; stop 0.1 average true ranges below entry; risk 1% of the allocation per trade; sell at the stop or at 15:55.
 
@@ -205,7 +213,7 @@ The Wave Rider trigger counted on 15-minute bars shows what the 1-minute version
 
 **Example.** Fourteen-day average volume 20 million shares, so 15 normal minutes are 770,000; the first 15 minutes trade 2.8 million (3.6x) with a high of 50.60 and ATR 1.50. A close at 50.65 buys; stop 50.50; on a $5,000 allocation the 1% risk is $50, so 333 shares, capped by the slot to 98. **Evidence:** the 22 September figure (profit factor 0.93 on 253 trades) was computed with the global 1% stop, because the strategy's stop hook never reached the broker; with the intended ATR stop the profit factor is 0.74 at 0.1 ATR and 0.91 at 0.25 ATR (230 trades, 33% win, the 100 trades that reached the close averaged +1.7%). The shadow slot uses 0.25 ATR from 24 September. The published edge draws on the whole market and the short side; both are open items. Runs in shadow as observation only.
 
-### 4.9 Cross-sectional day trades from *151 Trading Strategies* (shadow)
+### 4.9 Cross-sectional day trades from *151 Trading Strategies* (retired 2 November 2026)
 
 **Idea** (Kakushadze and Serur 2018, sections 3.9 and 3.20 and Appendix A). Rank the whole universe against itself once a day and buy the top of the ranking from the open to the close. Three scores, each a log return with the universe average removed so a market-wide gap cancels: overnight reversal (buy the names that fell most overnight relative to peers), previous-day momentum (buy yesterday's relative intraday winners) and intraday reversal (at a later entry, buy the laggards since the open); a combo adds the first two. Long-only, company stocks only (funds and leveraged products excluded), equal dollars or dollars in proportion to 1/σ, an optional hard stop, sold at 15:55.
 
@@ -242,6 +250,65 @@ V = \sum_{\text{legs}} (\pm 1)\, m_i\, r_i \quad (+ \text{buy}, - \text{sell}), 
 **Example.** Long iron condor on SPY at 710, capital $20,000: buy the 682 put, sell the 696 put, sell the 724 call, buy the 738 call, 35 days out, credit $2.10 per share, max loss $11.90; 20% of capital allows 3 units (max loss $3,570). Nine days later the package costs $1.00 to close: P&L $1.10 per share is 52% of the max, so the profit-target rule closes it for +$330 before spreads.
 
 **Status.** Three observation slots run in shadow from 24 September, deciding at 15:40 ET with legs filled against live OPRA quotes at a quarter of the half-spread: an iron condor on SPY gated on the volatility risk premium, a bull put spread on QQQ, a covered call on AAPL. Live placement as one multi-leg order on the paper account exists but stays off until fills are reconciled. A close accepts an option quoted with an ask and no bid: buying it back pays the ask, and selling it gets nothing. With no fill price at all, a close falls back to the mid, then the saved last mark, then exercise value, and never silently to the entry price. This rule was added on 29 October 2026, after the shadow QQQ covered call was booked at $0.00 instead of −$1,892.13. Backtested 24 September on chains rebuilt from Alpaca's daily option bars (February 2024 to September 2026, SPY, QQQ and IWM monthly expiries, expired contracts included), replaying the bot's own slot code with fills crossing the full modelled spread: 144 configurations. Iron condors lose in a rising market. The bull put spread with strikes 5% and 10% out, entered only when implied volatility exceeds realised by 3 points and held to the day before expiry, matched or beat each index's Sharpe (QQQ 1.56 against 1.08, SPY 1.13 against 1.16) with about a third of its drawdown, positive in both halves on all three; it sat out the April 2025 crash because the gate was closed. About 20 trades per underlying, so a candidate to observe, not a proven edge. The shadow slots now run exactly these settings on SPY and QQQ, plus a gated covered call on QQQ. Feature 22; verified API facts in docs/api/options.md.
+
+**Long-history test, 2 November 2026** (docs/research/2026-11-02-put-spread-long-history.md). The `bps_spy` rule was replayed from 1990 to 2026. It was priced with Black-Scholes at VIX times a skew curve fitted to 55,360 real SPY put closes, with an implied-volatility error of 0.86 points. Results:
+- 2.4% a year above T-bills, Sharpe 0.25, against 0.51 for the stock market.
+- A −52% drawdown at the slot's 20% risk per spread, from September 2000 to October 2002.
+- Losses as deep as the market's in slow bear markets: 2000-02 −49%, 2011 −25%. The volatility gate helps in fast crashes (Q4 2018 −4%, April 2025 −3.5%) and does nothing in slow declines.
+- Monthly correlation with stocks 0.53: mostly a leveraged bet that stocks stay calm.
+
+It fails three of its four pre-registered criteria and is **not promoted**. The slots stay as they are until the owner decides between retiring them and observing at 5% risk per spread, where the measured drawdown was −11.7%.
+
+### 4.12 Trend following across asset classes (shadow, insurance sleeve)
+
+**Idea** (Moskowitz, Ooi and Pedersen 2012; Hurst, Ooi and Pedersen 2017). Once every five sessions, for each of 21 ETFs, ask whether it has been rising or falling over 1, 3 and 12 months:
+- **The funds:** stocks (SPY, IWM, EFA, EEM, EWJ, VNQ), bonds (IEF, TLT, TIP, LQD, HYG, EMB), commodities (GLD, SLV, DBC, USO, DBA, UNG) and currencies (UUP, FXE, FXY).
+- **Position:** long if rising, short if falling, a third of a position when the three disagree.
+- **Size:** each asset class gets an equal share of risk, each fund an equal share of its class, and each position is divided by the fund's own volatility.
+- **Whole book:** scaled to 10% volatility a year using the funds' covariance over six months, at most half the book in one fund and 2× gross.
+
+The point is not return: by the time a sell-off has run for a few weeks, the book tends to be short stocks and long safe assets.
+
+```latex
+s_i = \frac{1}{3}\sum_{k \in \{21,\,63,\,252\}} \operatorname{sign}\!\Big(\frac{C_{i,t}}{C_{i,t-k}} - 1\Big), \qquad \tilde w_i = \frac{s_i\, b_i}{\sigma_i}, \qquad w = \tilde w \cdot \frac{10\%}{\sqrt{\tilde w^{\top} \Sigma\, \tilde w}}
+```
+
+**Example.** TLT has fallen over 1, 3 and 12 months, so s = −1.
+- The bond class has a quarter of the risk and six funds, so its budget is b = 1/24.
+- At 14% volatility its raw weight is −(1/24)/0.14 = −0.30.
+- If the raw book's expected volatility is 7.5%, everything is scaled by 10/7.5. TLT becomes −0.40 of equity: short $20,000 of TLT in the $50,000 slot.
+
+**Evidence** (docs/research/2026-11-02-trend-following.md).
+- **On the ETFs, 2017-2026:** the pre-registered book earned the T-bill rate (Sharpe 0.00 with interest on cash; +1.1% a year on the engine, which pays none). But +26% in 2022, +5% in the Covid crash and +3.5% in Q4 2018. In SPY's worst tenth of months it averaged +1.7%, while SPY lost 7.5%.
+- **The same rule on a century of US stocks** (Ken French): Sharpe 0.37 against 0.45 for holding, a −26% drawdown against −84%, and +63% in 1929-32, +45% in 1973-74, +13% in 2008-09. Its edge has faded since the 1990s.
+- **Where it fails:** sell-offs that reverse within weeks (April 2025, −4.8%) and the year after a big trend year (2023, −11.7%).
+- **Next to the put spread** (1990-2026, both at 10% volatility): it halved the 2008-09 loss but did nothing in 2000-02, and the pair still drew down 34%.
+
+**Status:** shadow slot `tf_etfs` from 3 November 2026, $50,000 simulated, as insurance, not as a return source.
+
+### 4.13 Stat arb in volatile markets (shadow)
+
+**Idea** (Avellaneda and Lee 2010; Nagel 2012). Take out each stock's market and sector moves; what is left, its residual, tends to reverse over about a week, but only when the market is stressed and liquidity providers step back.
+
+The rule:
+- **Gate.** Each morning, if VIX closed at 20 or above yesterday, form a cohort.
+- **Positions.** Buy the fifth of 254 liquid stocks whose residuals fell most over the last five sessions, and short the fifth that rose most, 20% of capital a side.
+- **Hedge and hold.** Hedge the betas with SPY and the sector ETFs, and hold five sessions.
+
+```latex
+r_i = a + \beta_m r_{SPY} + \beta_s (r_{sector} - r_{SPY}) + e_i, \qquad s_i = \sum_{j=1}^{5} e_{i,t-j}, \qquad \text{long the lowest fifth of } s, \text{ short the highest, if } VIX_{t-1} \ge 20
+```
+
+**Example.** On 8 April 2025 VIX closed at 52.3. On the 9th at the open, the cohort bought 60 stocks and shorted 60, each side 20% of capital. Its ETF hedges included +8.6% SPY and +10.6% XLK, because the shorts were heavy in tech winners. It sold everything five sessions later.
+
+**Evidence** (docs/research/2026-11-02-statarb-stage1.md, -volatility-gated.md). Always on, residual reversal is too small to pay its costs (break-even 4.3 bp). Gated on VIX ≥ 20 over 2017-2026, the results were:
+- +29.7 bp per cohort after 26 bp of costs, positive in both halves;
+- +4.3% a year on capital, Sharpe 0.48, worst drawdown −11.2%, invested 42% of the time;
+- 2020 (+33.8%) and 2025 (+14.8%) did most of the work, and the slow 2022 decline earned nothing.
+
+It is the mirror of trend following. **Status:** shadow slot `sa_volrev` from 3 November 2026, $500,000 simulated.
+
+**Costs, measured 9 November** (docs/research/2026-11-09-statarb-costs.md). The stocks the rule picks cost 10.9 bp each way at 09:35, more than twice the 5 bp the backtest assumed. Re-priced as the slot trades, a cohort earns +11.9 bp (t 0.6), about +1.7% a year: no demonstrable edge. The opening auction has no spread, so filling there is the next thing to test. The backtest's price panel also lacks stocks delisted since late 2022 (docs/research/2026-11-09-panel-survivorship-gap.md).
 
 ## 5. Research protocol: how a strategy earns its place
 
@@ -295,6 +362,15 @@ A strategy that passes runs in shadow mode on live prices with its own ledger un
 
 The paper account holds $100,000; strategies are given $10,000 a day between them, split by weight, compounding through their own ledgers, and watched by three kill switches inside the bot. Every number here is a setting in `config/settings.yaml`.
 
+### Risk budget for the combined book (2 November 2026)
+
+The owner accepted the proposal: a 10% volatility target, a 15% drawdown limit, and option selling only with a bought wing. The same day's combination study (docs/research/2026-11-02-trend-following.md, section 6) showed the two numbers conflict for any book holding stock risk:
+- Over 1990-2026 at 10% volatility, every such mix drew down 26% to 39% in 2000-02.
+- Staying inside 15% needed about 4% to 6.5% volatility.
+- The best single sleeve was the stock market held at constant volatility: Sharpe 0.63 against 0.51 for buy and hold.
+
+Which number gives way is the owner's call.
+
 ### Allocation and reinvestment
 
 Each live strategy starts with a share of the base allocation and then follows its own reinvestment rule day by day; shadow strategies get base times their weight so their paper record is comparable.
@@ -333,7 +409,7 @@ p \sim \mathrm{Beta}(1+w,\ 1+l), \qquad \text{halt if } \Pr\!\big(p < p_{\text{b
 
 ### Safety nets that are not settings
 
-Every entry carries a server-side stop order at Alpaca, so a bot crash leaves the position protected. On restart the bot reconciles its books with the broker's positions and hands each one back to the strategy that recorded it. When that stop and the bot's own exit fire together, the bot checks the stop first and books its fill instead of selling again, and a live slot never sells more shares than Alpaca holds. Selling more would open a short; NUWE on 29 October 2026 came close. The code refuses to build a client against the live-money endpoint; the paper flag must be true in both settings and the environment.
+Every entry carries a server-side stop order at Alpaca, so a bot crash leaves the position protected. On restart the bot reconciles its books with the broker's positions and hands each one back to the strategy that recorded it. When that stop and the bot's own exit fire together, the bot checks the stop first and books its fill instead of selling again, and a live slot never sells more shares than Alpaca holds. Selling more would open a short; NUWE on 29 October 2026 came close. The bot reads the stop only after it has settled. If Alpaca refuses a sell, the position goes back to normal so the bot retries. On 6 November 2026 a refused sell left 32 WULF shares in the account over a weekend without a stop. The code refuses to build a client against the live-money endpoint; the paper flag must be true in both settings and the environment.
 
 ## 7. Operations
 
@@ -415,6 +491,16 @@ Six experiments have been run since 17 September 2026. One configuration is thin
 | 24 Sep | Daily engine benchmark made point-in-time; strategies re-run | 2017 to 2026, 7,786 active and delisted stocks, monthly top 100 | Universe 16.8%/yr (was 22.4%). Long-only price momentum IR 0.51 (t 1.6), both halves positive; residual momentum in high-vol chop t 2.4; long-short loses | Long-only momentum is the leading daily candidate; shadow slot moved to the live universe |
 | 24 Sep | Options backtest on rebuilt chains: 6 structures, 3 underlyings, strike distance, volatility gate, exits | Feb 2024 to Sep 2026, SPY/QQQ/IWM monthlies, 144 configurations, full spread paid | Iron condors lose. Gated 5%-out bull put spread held to expiry: QQQ Sharpe 1.56 (index 1.08), SPY 1.13 (1.16), IWM 0.58 (0.79), drawdowns about a third of the index's, both halves positive; about 20 trades each | First family that holds up on risk; shadow slots switched to these settings; not live |
 | 28 Oct | Live and shadow operation since 25 September | 24 sessions, paper account | Only 2 sessions ran a full day with a universe: the Mac slept on battery, and from 20 October a new exchange code (TXSE) broke the asset list. Wave Rider 8 live trades, 2 wins, −$19.68; momentum portfolio $9,338 from $10,000, frozen since 19 Oct; bull put spreads +$294 (QQQ) and +$174 (SPY) open | Shadow results for the period are void as evidence; both code causes fixed 28 Oct; observation restarts from the first full session |
+| 2 Nov | Trend following, long-short across 21 ETFs in four classes, 10% volatility (pre-registered) | 2017 to 2026 Alpaca adjusted bars; 5 configurations | Base: the T-bill rate (Sharpe 0.00 with interest), −20% drawdown; +26% in 2022, +5% Covid, +1.7% a month in SPY's worst tenth of months | Not an alpha; shadow as insurance (`tf_etfs`) |
+| 2 Nov | The same rule on a century of outside data | US stocks 1927 to 2026 (Ken French), plus a 10-year Treasury from FRED yields 1963 to 2026; 3 configurations | Stocks only: Sharpe 0.37 (holding 0.45), drawdown −26% (holding −84%), positive in 1929-32, 1973-74, 1987, 2008-09. Stocks and bonds: 0.37, −14.5% | The insurance is real and old; the premium has faded since the 1990s |
+| 2 Nov | Bull put spread over 36 years | 1990 to 2026, Black-Scholes at VIX times a skew curve fitted to 55,360 real SPY puts; 5 configurations | Sharpe 0.25 over T-bills (market 0.51), drawdown −52% at 20% risk per spread; 2000-02 −49%; correlation with stocks 0.53; fails 3 of 4 criteria | Not promoted |
+| 2 Nov | Sleeves combined at equal risk and 10% volatility | 1990 to 2026; 6 portfolios + 1 added after | Put spread + trend: Sharpe 0.53, drawdown −34%. Constant-volatility stocks alone 0.63, −26%. No stock-holding mix inside −15%; that needed 4% to 6.5% volatility | Trend does not rescue the put spread; the risk budget's two numbers conflict |
+| 2 Nov | Momentum and short-term reversal over a century (Ken French) | 1927 to 2026, all US stocks; 6 pre-registered series | Momentum scaled by its volatility: Sharpe 0.99 (0.55 since 2000), 2009 crash −18% instead of −50%; long-only scaled version IR 0.83 (0.38 since 2000). Monthly reversal: Sharpe 0.12 since 2000, large caps 0.02, break-even 1 to 3 bp | Volatility-scaled momentum is the leading candidate for an edge; textbook stat arb is gone, residual reversal over days to be diagnosed first |
+| 2 Nov | Stat arb stage 1: do residual moves (after SPY and the sector ETF) reverse over 1 to 5 days? | Point-in-time top 300, 2017 to 2026, from the next open; 9 cells | Always-on: best +17 bp per 5-day round trip, never t 2 in both halves, break-even 4.3 bp. VIX ≥ 20: +51 bp (t 2.6), both halves positive, break-even 13 bp | Kill test failed; the volatile-market version is a lead for its own test |
+| 2 Nov | `pm_actives` with a volatility-scaled overlay | Survivorship-free top 100, Jul 2017 to Sep 2026; 2 configurations | IR vs SPY 0.43 (plain 0.48), both halves positive; worst stretch vs SPY −19.6% (plain −37.6%); 2026 +29.7% (plain +74.5%) | Passes as risk control; to shadow |
+| 2 Nov | Stat arb in volatile markets as a tradable rule | Same universe, 779 gated sessions, 2 configurations | +29.7 bp per cohort after 26 bp costs (t 1.5), both halves positive, +4.3% a year, Sharpe 0.48, drawdown −11.2%; 2020 +33.8% and 2025 +14.8% did most of it | Shadow slot `sa_volrev` from 3 Nov, idle while VIX < 20 |
+| 9 Nov | What the stat-arb rule really pays to trade | Quote history on 60 volatile and 30 calm sessions; minute bars on all 779 volatile sessions | The picks' half-spread at 09:35 is 10.9 bp, not the 5 assumed; waiting from the open to 09:35 gains 5.7 bp. Re-priced: +11.9 bp per cohort (t 0.6), about +1.7% a year | No demonstrable edge as the slot trades; rule unchanged; opening-auction fills to be tested |
+| 9 Nov | Check of the price panel behind every 2017-2026 study | 12 well-known delisted stocks; delistings counted by year | All 12 absent; the panel has delistings for 2018-2022 only, about 50 to 60 liquid stocks missing from 2023 on | Results on it carry survivorship bias after 2022; a free repair is proposed |
 
 ### The base strategy's exits, from the base run
 
@@ -432,6 +518,13 @@ The asymmetry is the whole story of the strategy: when the wave exit fires it al
 Profit factor 1.25 on 116 trades has a win-rate posterior of 35.6% ± 4.4% and a 10% chance of being below the 30% break-even; the Bayes factor for "same hit rate as unfiltered" is 9 to 1, meaning the gain came through payoff size, not hit rate. Maximum drawdown in the run was $151 against +$168 net. This is a configuration worth paper trading, not a proven edge, and every further claim goes through the gates in Chapter 5.
 
 ## 9. Roadmap
+
+**Direction since 2 November 2026** (docs/roadmap-advanced-strategies.md, top section):
+- **The plan.** Stop competing at intraday horizons. Build a book of independent sleeves, each a documented premium or structural effect, at equal risk under one volatility target, and judge each on long outside histories.
+- **First results.** The put spread fails over 36 years. Trend following is insurance, in shadow. The stock market at constant volatility was the best single sleeve.
+- **Momentum over a century (same evening).** Scaled by its own volatility, momentum passes: information ratio 0.83 over 1927-2026, 0.38 since 2000, crashes halved. It is now the leading candidate for an actual edge.
+- **Statistical arbitrage.** Its textbook base, short-term reversal, has earned nothing in large caps since 1977. The plan has three stages, each with a kill test: first a diagnostic of each stock's own move after removing its market and sector moves (residual reversal over 1 to 5 days), then a strategy only if that passes, then shadow. **Stage 1 (same evening): always-on fails; with VIX ≥ 20 the 5-day reversal earned 51 bp a round trip (t 2.6), so a volatility-gated version gets its own test.** **Stage 2a: that version passed its strategy test after costs and runs in shadow as `sa_volrev` from 3 November.** The momentum overlay passed as risk control and goes to shadow.
+- The candidates below are the September plan, kept for the record.
 
 Higher profit has to come from breadth, holding periods matched to documented effects, and risk sizing, because the base strategy's edge per bet is tiny. The fundamental law of active management (Grinold and Kahn) sets the frame: information ratio equals skill per bet times the square root of the number of independent bets.
 
@@ -518,7 +611,7 @@ Ride The Wave stays live as the reference strategy and the live-feed data collec
 | `CLAUDE.md` | Running status table, decisions, working rules; read first every session |
 | `docs/vision-autonomous-quant.md`, `docs/roadmap-advanced-strategies.md` | End goal, architecture target, candidate strategies |
 | `docs/architecture.md`, `docs/strategy.md`, `docs/decisions.md` | Design, the base strategy's rules and parameter history, every technical decision with its reason |
-| `docs/features/01` to `15` | One plain-English page per feature |
+| `docs/features/01` to `23` | One plain-English page per feature |
 | `docs/research/` | Dated experiment write-ups with numbers |
 | `docs/api/` | Alpaca endpoint notes with sample responses |
 | `docs/books/` | Tsay, Dixon and Rao PDFs (not committed) and what each is for |
@@ -527,6 +620,7 @@ Ride The Wave stays live as the reference strategy and the live-feed data collec
 | `scripts/` | Entry points: bot, dashboard, backtest, sweep, diagnostics, features, reports, scheduling |
 | `.claude/skills/dixon-ml-finance/`, `.claude/skills/typesafe-jev/` | The modelling rules and the Jev integration guide the AI loads automatically |
 | `data/` | SQLite database, bar cache, feature datasets, reports, logs (all runtime, not committed) |
+| `data/external/` | Outside histories for research: Ken French, Cboe, FRED (runtime, not committed) |
 
 ### References
 

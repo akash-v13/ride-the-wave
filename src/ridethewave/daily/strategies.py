@@ -29,6 +29,7 @@ class Window:
     benchmark: str = "SPY"
     held: dict[str, float] = field(default_factory=dict)
     log: Callable[[str], None] = lambda _: None
+    external: dict[str, pd.DataFrame | pd.Series] = field(default_factory=dict)  # outside series, by name
 
     def closes(self, n: int, symbols: list[str] | None = None) -> pd.DataFrame:
         cols = [s for s in (symbols or self.symbols) if s in self.close.columns]
@@ -46,6 +47,8 @@ class DailyStrategy:
     name: str = "daily"
     params_model: type[BaseModel] = NoParams
     warmup: int = 0
+    extra_symbols: list[str] = []  # read but not part of the universe (hedges, sector ETFs): the runner fetches them
+    external_series: list[str] = []  # ridethewave.data.external names the runner loads into Window.external
 
     def __init__(self, params: dict | None = None):
         self.p = self.params_model.model_validate(params or {})
@@ -579,6 +582,141 @@ class MovingAverageRule(DailyStrategy):
         return {}
 
 
+# ---------------------------------------------------------------- time-series momentum (trend following)
+# The trend sleeve's markets (2026-11-02): four asset classes, each given an equal share of risk, so six
+# bond funds do not outvote three currency funds. SHY is left out: at 1-2% volatility it is cash, and
+# scaling it to the others' risk would need many times leverage. All 21 trade since before 2016.
+TREND_CLASSES: dict[str, str] = {
+    **dict.fromkeys(["SPY", "IWM", "EFA", "EEM", "EWJ", "VNQ"], "equity"),
+    **dict.fromkeys(["IEF", "TLT", "TIP", "LQD", "HYG", "EMB"], "bond"),
+    **dict.fromkeys(["GLD", "SLV", "DBC", "USO", "DBA", "UNG"], "commodity"),
+    **dict.fromkeys(["UUP", "FXE", "FXY"], "currency"),
+}
+
+
+class TrendParams(BaseModel):
+    lookbacks: list[int] = Field(default_factory=lambda: [21, 63, 252])  # 1, 3 and 12 months
+    vol_com: int = Field(60, ge=5, le=250)  # centre of mass of each market's EWMA volatility, days
+    cov_days: int = Field(126, ge=20, le=504)  # window for the whole book's ex-ante volatility
+    target_vol: float = Field(0.10, gt=0, le=0.5)  # the book's volatility, a year
+    max_gross: float = Field(2.0, gt=0, le=4)  # Reg-T overnight limit on the paper account
+    max_weight: float = Field(0.5, gt=0, le=2)
+    allow_short: bool = True
+    classes: dict[str, str] = Field(default_factory=lambda: dict(TREND_CLASSES))  # unlisted markets: "other"
+    model_config = {"extra": "forbid"}
+
+
+def trend_weights(close: pd.DataFrame, p: TrendParams) -> dict[str, float]:
+    """Target weights from adjusted closes (oldest row first), as in Hurst, Ooi & Pedersen, "A Century of
+    Evidence on Trend-Following Investing" (2017):
+
+    1. Signal per market: the average sign of its 1-, 3- and 12-month returns, so -1, -1/3, +1/3 or +1.
+    2. Risk budget: each asset class an equal share, each market an equal share of its class.
+    3. Size: signal x budget / the market's EWMA volatility, so a quiet bond fund and a wild gas fund
+       carry the same risk.
+    4. Scale the whole book to ``target_vol`` using the trailing covariance (markets that move together
+       get less), then cap each weight and the gross exposure.
+
+    Uses total-return signs, not returns over cash: the live slot then needs no rate series. Pure.
+    """
+    need = max(p.lookbacks) + 1
+    cols = [c for c in close.columns if len(close) >= need and close[c].iloc[-need:].notna().all()]
+    if not cols:
+        return {}
+    px = close[cols]
+    last = px.iloc[-1]
+    sig = sum(np.sign(last / px.iloc[-1 - lb] - 1.0) for lb in p.lookbacks) / len(p.lookbacks)
+    if not p.allow_short:
+        sig = sig.clip(lower=0.0)
+    rets = px.pct_change().iloc[1:]
+    vol = rets.ewm(com=p.vol_com).std().iloc[-1] * math.sqrt(252)
+    groups: dict[str, list[str]] = {}
+    for s in cols:
+        groups.setdefault(p.classes.get(s, "other"), []).append(s)
+    budget = pd.Series({s: 1.0 / len(groups) / len(members) for members in groups.values() for s in members})
+    raw = (sig * budget / vol).replace([np.inf, -np.inf], np.nan).dropna()
+    raw = raw[raw != 0]
+    if raw.empty:
+        return {}
+    cov = rets[raw.index].iloc[-p.cov_days :].cov().to_numpy() * 252
+    port_vol = math.sqrt(max(float(raw.to_numpy() @ cov @ raw.to_numpy()), 0.0))
+    if not port_vol > 0:
+        return {}
+    w = (raw * (p.target_vol / port_vol)).clip(-p.max_weight, p.max_weight)
+    gross = float(w.abs().sum())
+    if gross > p.max_gross:
+        w = w * (p.max_gross / gross)
+    return {s: float(v) for s, v in w.items() if abs(v) > 1e-6}
+
+
+class TimeSeriesMomentum(DailyStrategy):
+    """Trend following across asset classes, long or short (the sleeve proposed 2026-10-29)."""
+
+    name = "trend_following"
+    params_model = TrendParams
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.warmup = max(max(self.p.lookbacks), self.p.cov_days) + 2
+
+    def targets(self, w: Window) -> dict[str, float]:
+        cols = [s for s in w.symbols if s in w.close.columns]
+        n = max(max(self.p.lookbacks) + 1, self.p.cov_days + 1, 4 * self.p.vol_com)
+        return trend_weights(w.close[cols].iloc[-n:], self.p)
+
+
+# ---------------------------------------------------------------- stat arb: residual reversal in volatile markets
+class VolGatedReversalParams(BaseModel):
+    vix_gate: float = Field(20.0, gt=0)
+    k: int = Field(5, ge=1, le=20)  # sessions of residuals in the signal
+    hold: int = Field(5, ge=1, le=20)  # sessions a cohort is held
+    fraction: float = Field(0.2, gt=0, le=0.5)  # the fifth bought and the fifth shorted
+    side: float = Field(0.2, gt=0, le=1)  # capital per side per cohort
+    decide_at_open: bool = True  # the last row is today's unfinished bar: use completed sessions only
+    market: str = "SPY"
+    sector_etfs: list[str] = Field(
+        default_factory=lambda: ["XLK", "XLF", "XLV", "XLY", "XLP", "XLE", "XLI", "XLB", "XLRE", "XLU", "XLC"]
+    )
+    model_config = {"extra": "forbid"}
+
+
+class VolGatedReversal(DailyStrategy):
+    """Stat arb stage 2a (docs/research/2026-11-02-statarb-volatility-gated.md): when VIX closed at 20 or
+    above the session before, buy the fifth of the universe whose residuals (after SPY and the sector ETF)
+    fell most over 5 sessions and short the fifth that rose most, hedge the betas, hold 5 sessions. The
+    targets are the sum of the cohorts still alive, rebuilt from history each day (``cohort_targets``)."""
+
+    name = "statarb_vol_reversal"
+    params_model = VolGatedReversalParams
+    external_series = ["vix"]
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.extra_symbols = [self.p.market, *self.p.sector_etfs]
+        self.warmup = 252 + 60 + self.p.k + self.p.hold + 2
+
+    def targets(self, w: Window) -> dict[str, float]:
+        from ridethewave.daily.statarb import cohort_targets
+
+        vix = w.external.get("vix")
+        if vix is None or len(vix) == 0:
+            w.log("no VIX history: no cohorts, the book goes to cash")
+            return {}
+        vix_close = vix["close"] if isinstance(vix, pd.DataFrame) else vix
+        close = w.close.iloc[:-1] if self.p.decide_at_open else w.close
+        close = close.iloc[-self.warmup :]
+        last = close.index[-1]
+        if vix_close.index.max() < last:
+            w.log(f"VIX known only to {vix_close.index.max().date()}, last session {last.date()}: no new cohort today")
+        p = self.p
+        weights, notes = cohort_targets(
+            close, w.symbols, vix_close, p.sector_etfs, p.market, p.k, p.hold, p.fraction, p.side, p.vix_gate
+        )
+        for line in notes or ["no live cohorts (VIX below the gate on every recent session)"]:
+            w.log(line)
+        return weights
+
+
 # ---------------------------------------------------------------- registry
 DAILY_REGISTRY: dict[str, type[DailyStrategy]] = {
     c.name: c
@@ -596,6 +734,8 @@ DAILY_REGISTRY: dict[str, type[DailyStrategy]] = {
         IbsMeanReversion,
         VolTargeting,
         MovingAverageRule,
+        TimeSeriesMomentum,
+        VolGatedReversal,
     )
 }
 

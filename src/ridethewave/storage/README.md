@@ -2,7 +2,7 @@
 
 SQLite persistence. One file, `data/ridethewave.db`.
 
-- `schema.sql`: tables `bars`, `orders`, `trades`, `positions`, `daily_ledger`, `bot_state`, `backtest_runs`, `equity_curve`, `features_live`. Applied idempotently on every start.
+- `schema.sql`: tables `bars`, `orders`, `trades`, `positions`, `daily_ledger`, `bot_state`, `backtest_runs`, `equity_curve`, `features_live`, `control_requests`, `structures`, `portfolio_fills` (each simulated fill of a daily slot with the bid and ask at that moment, feature 25). Applied idempotently on every start.
 - `db.py`: `Database` wrapper (WAL mode, read-only mode for the UI, in-memory mode for tests).
 - `repos.py`: one small repository class per table; no raw SQL outside this package except the dashboard's read-only queries.
 

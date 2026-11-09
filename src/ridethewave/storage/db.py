@@ -38,6 +38,7 @@ class Database:
         self.features = repos.FeatureRepo(self.conn)
         self.control = repos.ControlRepo(self.conn)
         self.structures = repos.StructureRepo(self.conn)
+        self.fills = repos.FillRepo(self.conn)
 
     def _migrate(self) -> None:
         """Bring a pre-multi-strategy database up to date. Idempotent."""
@@ -103,6 +104,7 @@ class Database:
         db.features = repos.FeatureRepo(db.conn)
         db.control = repos.ControlRepo(db.conn)
         db.structures = repos.StructureRepo(db.conn)
+        db.fills = repos.FillRepo(db.conn)
         return db
 
     def close(self) -> None:

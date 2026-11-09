@@ -1,7 +1,11 @@
-"""Survivorship-free daily history: every US equity Alpaca has ever listed (active AND delisted), adjusted
-daily bars from 2016, written as parquet chunks under data/daily_panel/. This is the pool a point-in-time
-universe must be drawn from if a backtest "started in 2017" is to mean anything: the names that went to
-zero are in it. Alpaca lists ~19k inactive assets and serves their history (verified 2026-09-23).
+"""Daily history for every US equity in Alpaca's asset list, active and inactive: adjusted daily bars
+from 2016, written as parquet chunks under data/daily_panel/. This is the pool point-in-time universes
+are drawn from.
+
+**Not survivorship-free (found 2026-11-09).** Alpaca's list drops a stock when it is delisted, so the
+inactive part covers delistings of about 2018 to 2022 only. Stocks delisted since late 2022, or in
+2016-17, are missing unless they are added by symbol; Alpaca still serves their prices.
+docs/research/2026-11-09-panel-survivorship-gap.md.
 
     uv run python scripts/download_universe_history.py --start 2016-01-01 --end 2026-09-22
 """

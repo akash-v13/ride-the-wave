@@ -75,7 +75,7 @@ up on the first request (`tests/test_client_timeouts.py`).
 | Agent | When | Runs |
 |---|---|---|
 | bot | 06:30 ET on weekdays (written in system time); not at load | `run_bot.py`: waits for the 09:30 ET open, trades, exits at the close; relaunched by launchd if it crashes, and by the watchdog (section 4) if the Mac restarted |
-| operator | every 5 minutes | `operator_tick.py`: the watchdog, the health check, then any task that is due by Eastern time and not yet done today: reports at 09:00, 11:30, 14:00, 16:15 and 21:00 ET, the nightly job at 20:30 ET |
+| operator | every 5 minutes | `operator_tick.py`: the watchdog, the health check, then any task that is due by Eastern time and not yet done today: reports at 09:00, 11:30, 14:00, 16:15 and 21:00 ET, the market recording at 15:45 ET (feature 25), the nightly job at 20:30 ET |
 | api | always (kept alive) | `web/dist/server.js`: the TypeScript API and web page on http://127.0.0.1:8787 (feature 18) |
 
 Why an interval job decides the time of day itself: launchd fires calendar jobs in the timezone it

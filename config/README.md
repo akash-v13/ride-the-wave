@@ -4,4 +4,6 @@ Strategy and runtime settings as YAML. `settings.example.yaml` is committed; cop
 
 Loaded by `ridethewave.config.Settings` (phase 2), validated with pydantic so a typo fails at startup rather than mid-trade.
 
+`universes/` holds fixed symbol lists slots can use with `universe: file:...` (README inside).
+
 `profiles/` keeps every previous parameter set as a complete, runnable settings file, so old behaviour can be re-run for comparison. Never edit a profile; add a new one.

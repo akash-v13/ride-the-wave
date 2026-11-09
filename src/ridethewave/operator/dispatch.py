@@ -29,6 +29,9 @@ def daily_tasks(report_times: list[str]) -> list[Task]:
     for kind, hhmm in zip(kinds, report_times, strict=True):
         hh, mm = hhmm.split(":")
         tasks.append(Task(f"report-{kind}", time(int(hh), int(mm)), ["scripts/report.py", kind]))
+    # Borrow flags and option quotes (feature 25). 15:45 so the quotes are live; if the tick runs late, or on
+    # a half day, the script records the closing quotes and says so in the file.
+    tasks.append(Task("record-market", time(15, 45), ["scripts/record_market_state.py"]))
     tasks.append(Task("nightly", time(20, 30), ["scripts/nightly.py"]))
     return tasks
 

@@ -71,6 +71,7 @@ strategies:                    # accounting key `id`; `mode: shadow` = simulated
       exit_time: "15:58"
   - id: wave_rider_15m           # OBSERVATION ONLY: backtest PF 1.00 with the market gate (break-even), 0.89 without.
     kind: wave_rider             # docs/research/2026-09-22-fifteen-minute-and-orb-backtests.md
+    enabled: false             # RETIRED 2026-11-02: lost in its backtest and again in shadow. docs/decisions.md
     mode: shadow
     weight: 0.5
     params:
@@ -80,16 +81,19 @@ strategies:                    # accounting key `id`; `mode: shadow` = simulated
       exit: {trail_pct: 1.0, min_gain_pct: 0.5, hard_stop_pct: 2.0, max_hold_minutes: 180}
   - id: orb                      # OBSERVATION ONLY: long-only opening-range breakout. Backtest PF 0.91 at 0.25 ATR (0.74 at 0.1 ATR)
     kind: orb                    # once the stop hook reached the broker (2026-09-23); the earlier 0.93 used the global 1% stop.
+    enabled: false             # RETIRED 2026-11-02: lost in its backtest and again in shadow. docs/decisions.md
     mode: shadow
     weight: 0.5
     params: {range_minutes: 15, rvol_min: 3.0, stop_atr: 0.25, risk_pct: 1.0, exit_time: "15:55"}
   - id: xs_overnight             # OBSERVATION ONLY: Kakushadze & Serur open-to-close alpha, long leg (feature 19). No ranking power in
     kind: xs_daytrade            # the diagnostic; best backtest row PF 0.91 on 208 trades. docs/research/2026-09-23-kakushadze-151-feasibility.md
+    enabled: false             # RETIRED 2026-11-02: lost in its backtest and again in shadow. docs/decisions.md
     mode: shadow
     weight: 0.5
     params: {signal: overnight_reversal, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
   - id: xs_combo                 # OBSERVATION ONLY: the two Appendix-A alphas combined (overnight reversal + previous-day momentum), PF 0.84.
     kind: xs_daytrade
+    enabled: false             # RETIRED 2026-11-02: lost in its backtest and again in shadow. docs/decisions.md
     mode: shadow
     weight: 0.5
     params: {signal: combo, entry_time: "09:31", stop_pct: 0, max_gap_pct: 3.0, min_score_pct: 1.5}
@@ -105,6 +109,20 @@ portfolios:                    # daily-bar portfolios (feature 21): decided once
     universe: spy
     weight: 1.0
     params: {symbol: SPY, target_vol: 0.15, vol_days: 20, max_leverage: 1.0}
+  - id: tf_etfs                # trend following (2026-11-02): 21 ETFs in four classes, long or short, each class an equal
+    kind: trend_following      # share of risk, the book at 10% volatility. 2017-26 it earned the T-bill rate (Sharpe 0.00)
+    universe: trend_etfs_21    # but made +26% in 2022 and +5% in the Covid crash: insurance for the put spreads, not an
+    rebalance_days: 5          # alpha. Observation. docs/research/2026-11-02-trend-following.md
+    max_gross: 2.0
+    weight: 5.0                # $50,000 simulated, so one share of the dearest fund (GLD) is under 1% of the book
+  - id: sa_volrev              # stat arb (2026-11-02): only when VIX closed >= 20 the session before, buy the fifth of
+    kind: statarb_vol_reversal # 254 liquid stocks whose residuals (after SPY and their sector ETF) fell most over 5
+    universe: file:config/universes/liquid_stocks_254.txt  # sessions, short the fifth that rose most, hedge the
+    decision_time: "09:35"     # betas, hold 5 sessions. 2017-26: +30 bp per cohort after costs, t 1.5, both halves
+    max_gross: 3.0             # positive, 2020 and 2025 did most of it. Observation, idle while VIX < 20.
+    weight: 50.0               # $500,000 simulated: ~60 names a side per cohort need room for whole shares
+    dead_band_pct: 0.1         # $500: a name is 0.4% a cohort; the 1% default skipped every second cohort's add
+                               # docs/research/2026-11-02-statarb-volatility-gated.md
 
 options:                       # option structures (feature 22). SHADOW: legs filled against live OPRA quotes, nothing reaches
                                # Alpaca. Settings from the 2024-26 options backtest (docs/research/2026-09-24-options-backtest.md):

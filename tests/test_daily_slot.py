@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from ridethewave.config import PortfolioSpec, Settings
 from ridethewave.daily.data import Panel
@@ -77,6 +78,45 @@ def test_dead_band_and_ledger(db):
     assert led.extra["positions"] == 0 and led.next_allocation > 0
 
 
+def test_dead_band_comes_from_the_spec_so_many_small_names_can_add(db):
+    # sa_volrev, 2026-11-04: a name in a second cohort goes from 0.4% to 0.8% of $500k, a $2,000 add.
+    # The 1% default ($5,000) skipped it while the hedge was sized for both cohorts.
+    prices = {"AAA": 50.0}
+    for band, expected in ((1.0, 40), (0.1, 80)):
+        spec = PortfolioSpec(
+            id=f"pf_band_{band}", kind="price_momentum", universe="AAA", dead_band_pct=band, slippage_bps=0
+        )
+        slot = DailySlot(spec, Fixed({}), db, "live", capital=500_000)
+        slot.rebalance({"AAA": 0.004}, prices, NOW)
+        slot.rebalance({"AAA": 0.008}, prices, NOW)
+        assert slot.positions["AAA"].qty == expected
+
+
+def test_fills_are_stored_with_the_quote_standing_at_the_time(db):
+    spec = PortfolioSpec(id="pfq", kind="price_momentum", universe="AAA,BBB", slippage_bps=5)
+    slot = DailySlot(spec, Fixed({"AAA": 0.5, "BBB": -0.5}), db, "live", capital=10_000)
+    quotes = {"AAA": (109.95, 110.05)}  # the snapshot had no quote for BBB
+    slot.decide(panel(), {"AAA": 110.0, "BBB": 45.0}, NOW, ["AAA", "BBB"], quotes=quotes)
+    rows = {r["symbol"]: r for r in db.fills.for_day("pfq", "2026-09-18")}
+    a, b = rows["AAA"], rows["BBB"]
+    assert a["qty"] == 45 and a["last"] == 110.0 and a["price"] == pytest.approx(110 * 1.0005)
+    assert (a["bid"], a["ask"]) == (109.95, 110.05) and a["target"] == 0.5
+    assert b["qty"] == -111 and b["bid"] is None and b["ask"] is None  # kept, with no quote
+
+
+def test_a_failed_fill_record_never_stops_the_decision(db):
+    spec = PortfolioSpec(id="pfx", kind="price_momentum", universe="AAA")
+    slot = DailySlot(spec, Fixed({"AAA": 1.0}), db, "live", capital=10_000)
+
+    def broken(rows):
+        raise RuntimeError("disk full")
+
+    db.fills.insert_many = broken
+    fills = slot.decide(panel(), {"AAA": 50.0}, NOW, ["AAA"], quotes={"AAA": (49.99, 50.01)})
+    assert len(fills) == 1 and slot.positions["AAA"].qty == 200
+    assert {r["symbol"] for r in db.positions.all_rows()} == {"AAA"} and slot.decided_on == "2026-09-18"
+
+
 def test_settings_accept_portfolios_and_reject_duplicate_ids():
     s = Settings.model_validate(
         {"portfolios": [{"id": "pm", "kind": "price_momentum", "universe": "mega_caps_20", "weight": 0.5}]}
@@ -86,3 +126,39 @@ def test_settings_accept_portfolios_and_reject_duplicate_ids():
 
     with pytest.raises(ValueError):
         Settings.model_validate({"portfolios": [{"id": "wave_rider", "kind": "price_momentum"}]})
+
+
+def test_rebalance_days_trades_only_every_n_sessions_and_survives_a_restart(db):
+    spec = PortfolioSpec(id="tf", kind="trend_following", universe="AAA,BBB", rebalance_days=5)
+    prices = {"AAA": 110.0, "BBB": 45.0}
+    full = panel(30)
+    slot = DailySlot(spec, Fixed({"AAA": 0.5}), db, "live", capital=10_000)
+    assert slot.decide(Panel(**{k: getattr(full, k).iloc[:26] for k in ("open", "high", "low", "close", "volume")}),
+                       prices, NOW, ["AAA", "BBB"])  # fmt: skip
+    first = slot.rebalanced_on
+    # one to four sessions later: hold (no fills) even though the strategy now wants something else
+    later = DailySlot(spec, Fixed({"BBB": -0.5}), db, "live", capital=10_000)
+    later.load()
+    assert later.rebalanced_on == first
+    for n in (27, 28, 29, 30):
+        sub = Panel(**{k: getattr(full, k).iloc[:n] for k in ("open", "high", "low", "close", "volume")})
+        fills = later.decide(sub, prices, NOW, ["AAA", "BBB"])
+        assert fills == [] and set(later.positions) == {"AAA"} and later.decided_on == str(sub.dates[-1].date())
+    # the fifth session after the last trade rebalances
+    nxt = pd.bdate_range(full.dates[-1], periods=2)[1:]
+    ext = {
+        k: pd.concat([getattr(full, k), getattr(full, k).iloc[-1:].set_axis(nxt)])
+        for k in ("open", "high", "low", "close", "volume")
+    }
+    fills = later.decide(Panel(**ext), prices, NOW, ["AAA", "BBB"])
+    assert fills and "BBB" in later.positions and later.rebalanced_on == str(nxt[0].date())
+
+
+def test_rebalance_days_default_still_trades_every_day(db):
+    spec = PortfolioSpec(id="pd", kind="price_momentum", universe="AAA,BBB")
+    slot = DailySlot(spec, Fixed({"AAA": 0.5}), db, "live", capital=10_000)
+    p = panel(30)
+    slot.decide(Panel(**{k: getattr(p, k).iloc[:29] for k in ("open", "high", "low", "close", "volume")}),
+                {"AAA": 110.0}, NOW, ["AAA"])  # fmt: skip
+    slot.strategy = Fixed({"AAA": 0.2})
+    assert slot.decide(p, {"AAA": 110.0}, NOW, ["AAA"])  # the next session trades again

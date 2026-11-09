@@ -160,3 +160,35 @@ def test_close_report_by_strategy_with_dates_and_split_holds(db):
     assert "| bps_qqq | shadow | 1 | 1 | +303.25 | +0.00 | $20,303.25 |" in text
     assert "| wave_rider | live | 1 | 1 | +7.50 | +0.00 | $100,050.00 |" in text
     assert "- Average hold: day trades 20 min (1); held overnight or longer 7.5 days (2)" in text
+
+
+def test_a_strategy_with_many_rows_gets_one_summary_line(db):
+    """The stat-arb slot (2026-11-02) can hold ~600 positions; the report shows it as one line, the rest in full."""
+    from ridethewave.operator.reports import _positions_table, _trades_table
+
+    seed(db)
+    for i in range(30):
+        p = Position(f"S{i:02d}", 10 if i % 2 else -10, 50.0, NOW - timedelta(days=1), 51.0, 51.0)
+        p.strategy = "sa_volrev"
+        db.positions.upsert(p, "live")
+    table = _positions_table(db)
+    assert "| sa_volrev | 30 positions: 15 long, 15 short |" in table
+    assert "| S00 |" not in table and "AAPL" in table  # the small book keeps its rows
+    trades = [
+        Trade(
+            f"S{i:02d}",
+            10,
+            50.0,
+            NOW - timedelta(days=5),
+            50.5 if i < 20 else 49.0,
+            NOW,
+            "cohort_exit",
+            0.0,
+            mode="shadow",
+            run_id="live",
+            strategy="sa_volrev",
+        )  # fmt: skip
+        for i in range(26)
+    ]
+    out = _trades_table(trades, NOW.astimezone(timezone.utc).strftime("%Y-%m-%d"))
+    assert "| sa_volrev | 26 trades, 20 won |" in out and "cohort_exit 26" in out and "| S00 |" not in out

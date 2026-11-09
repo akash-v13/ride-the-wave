@@ -168,3 +168,21 @@ CREATE TABLE IF NOT EXISTS structures (
     broker_order_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_structures_strategy ON structures(strategy, status);
+
+-- Simulated fills of the daily portfolio slots, each with the quote standing at that moment
+-- (2026-11-09), so a shadow record can be re-priced at what a market order would really have paid.
+CREATE TABLE IF NOT EXISTS portfolio_fills (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy  TEXT NOT NULL,            -- portfolio slot id
+    run_id    TEXT NOT NULL,
+    day       TEXT NOT NULL,            -- YYYY-MM-DD, the session decided
+    ts        TEXT NOT NULL,            -- decision time, UTC
+    symbol    TEXT NOT NULL,
+    qty       REAL NOT NULL,            -- signed: + bought, - sold
+    price     REAL NOT NULL,            -- the simulated fill: last trade plus or minus slippage
+    last      REAL NOT NULL,            -- the last trade the fill was priced from
+    bid       REAL,                     -- the quote in the same snapshot; NULL when there was none
+    ask       REAL,
+    target    REAL                      -- target weight that caused the fill
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_fills_day ON portfolio_fills (strategy, day);
