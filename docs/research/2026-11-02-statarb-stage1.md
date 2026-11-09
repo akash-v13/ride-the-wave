@@ -139,3 +139,7 @@ Average spread by year, k5 h5:
     observation becomes the out-of-sample test.
   - **Honest expectation:** a sleeve that trades about a third of the year and earns its keep in
     stressed markets.
+
+## 6. Correction, 9 November 2026
+
+The price panel lacked delisted stocks. Repaired and re-run unchanged: the 5-day cell is +16.2 bp (t 2.0) on all days and +45.1 bp (t 2.3) with VIX ≥ 20, against +17.3 and +50.9 above. The kill test still fails and the reading stands. docs/research/2026-11-09-panel-survivorship-gap.md, section 5.

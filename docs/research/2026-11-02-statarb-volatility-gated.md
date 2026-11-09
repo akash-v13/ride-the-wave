@@ -112,3 +112,8 @@ XLK +10.6%).
 - **The live universe differs from the backtest:** it is the 254 most-traded stocks fixed in
   September, not a monthly top 300. Close enough to observe.
 - **The live record becomes evidence only after many volatile weeks.** One week is an anecdote.
+
+## 4. Corrections, 9 November 2026
+
+- **The price panel lacked delisted stocks.** Repaired and re-run unchanged, configuration A earns +24.9 bp per cohort at the assumed costs (t 1.2), not +29.7; halves +32.1 / +17.9; +3.6% a year, Sharpe 0.42, drawdown −13.3%. It still passes its test. docs/research/2026-11-09-panel-survivorship-gap.md, section 5.
+- **The assumed 5 bp cost was half the measured one.** As the slot trades, the repaired rule earns +7.5 bp per cohort (t 0.4). docs/research/2026-11-09-statarb-costs.md.

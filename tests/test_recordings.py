@@ -105,3 +105,23 @@ def test_borrow_flags_one_row_per_symbol():
     frame = asset_frame([asset("ZZZ", True, True), asset("ONDS", False, False)], "2026-11-09")
     assert frame["symbol"].tolist() == ["ONDS", "ZZZ"] and frame["day"].eq("2026-11-09").all()
     assert frame.set_index("symbol").loc["ONDS", ["shortable", "easy_to_borrow"]].tolist() == [False, False]
+
+
+def test_opening_auction_prices_come_from_the_largest_print_and_a_failure_loses_nothing_else():
+    from ridethewave.data.market_data import opening_auctions
+
+    class Client:
+        def __init__(self):
+            self.asked = []
+
+        def get(self, path, params):
+            self.asked.append((path, params["symbols"], params["start"], params["end"]))
+            if "BAD" in params["symbols"]:
+                raise RuntimeError("boom")
+            return {"auctions": {"F": [{"d": "2025-04-09", "o": [{"p": 8.54, "s": 1}, {"p": 8.5, "s": 1888347}]}],
+                                 "SPY": [{"d": "2025-04-09", "o": None}], "NONE": []}}  # fmt: skip
+
+    client = Client()
+    assert opening_auctions(client, ["F", "SPY", "NONE"], date(2025, 4, 9)) == {"F": 8.5}  # no print: left out
+    assert client.asked == [("/stocks/auctions", "F,NONE,SPY", "2025-04-09", "2025-04-09")]
+    assert opening_auctions(Client(), ["BAD"], date(2025, 4, 9)) == {}

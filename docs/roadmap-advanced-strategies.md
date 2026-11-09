@@ -2,6 +2,10 @@
 
 ## What stat arb needs next, and what to look for (2026-11-09)
 
+**The hunt list:** six conditional signals to test next are in
+[strategies/2026-11-09-signal-shortlist.md](strategies/2026-11-09-signal-shortlist.md), with the
+formulae and a worked example. The owner picks the order.
+
 **Asked by the owner:** what would improve the strategies, mostly stat arb, and which outside
 resources to look for. This section is the assessment and the wish list.
 
@@ -9,7 +13,8 @@ resources to look for. This section is the assessment and the wish list.
 the daily recordings run, and a gap was found in the price panel. The changes are marked below.
 
 **Where stat arb stands.** One rule runs in shadow (`sa_volrev`): +30 bp per cohort after costs over
-2017-2026, t 1.5, as first tested. Re-priced with measured spreads on 9 November: +12 bp, t 0.6.
+2017-2026, t 1.5, as first tested. On the repaired panel with measured spreads (9 November): +7.5 bp,
+t 0.4.
 Three things limit it, in this order.
 
 1. **Too little independent evidence.**
@@ -19,7 +24,8 @@ Three things limit it, in this order.
      on 2017-2026 adds another look, so refinements cannot be trusted until there is a second sample.
    - **Found 9 November:** the decade's price panel lacks stocks delisted since late 2022, about 50
      to 60 liquid names, so its last four years are measured on survivors
-     (docs/research/2026-11-09-panel-survivorship-gap.md).
+     (docs/research/2026-11-09-panel-survivorship-gap.md). Repaired the same day; the true gap was
+     larger and in every year, up to 8% of a year's top 300.
 2. **Costs were assumed. Measured on 9 November, they are twice the assumption**
    (docs/research/2026-11-09-statarb-costs.md).
    - The backtest charged 5 bp per stock trade. The picks really cost 10.9 bp at 09:35, on calm days
@@ -78,12 +84,15 @@ Licensed data goes under `data/` only. That folder is kept out of git, and the r
    simulated fill now stores its bid and ask (feature 25).
 2. **Done 9 November: the daily recordings run.** Borrow flags for every stock, and option quotes
    with implied volatility for the stat-arb names, at 15:45 ET (feature 25).
-3. **Next, waiting on the owner: repair the price panel.** Add the stocks delisted since 2020 from
-   Alpaca's corporate-actions feed, then re-run the frozen studies unchanged and report old against
-   new. This comes first because every other 2017-2026 number rests on the panel.
-4. **Then: test opening-auction fills.** Price every cohort at the official opening auction prints on
-   all 779 volatile sessions, with the design fixed in writing first. If they match the backtest's
-   open, auction orders (`opg`, which Alpaca supports) remove most of the cost.
+3. **Done 9 November: the price panel is repaired.** 2,708 delisted stocks added, named by Massive's
+   list (a one-time backfill) and priced by Alpaca. Every study was re-run unchanged: each number
+   fell a little and no verdict changed. As it trades, the stat-arb rule earns +7.5 bp per cohort,
+   t 0.4 (docs/research/2026-11-09-panel-survivorship-gap.md, section 5).
+4. **Done 9 November: opening-auction fills tested.** The backtest's open matches the auction long
+   against short, and at the auction the rule earns +40.6 bp per cohort (t 2.0), against +7.5 bp
+   with market orders at 09:35 (docs/research/2026-11-09-statarb-auction-fills.md). **Done the
+   same night, approved by the owner:** the shadow slot books its fills at the auction price from
+   10 November.
 5. **Test the combined book.** Reversal earned most in 2020 and April 2025, when momentum and trend
    did worst. Their daily returns have not yet been put side by side. This is item 4 below.
 6. **Write the refinements down before running them:**

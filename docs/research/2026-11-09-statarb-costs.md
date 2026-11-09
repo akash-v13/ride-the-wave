@@ -167,3 +167,19 @@ doubt. The spread result does not depend on it.
 - **Separate finding the same day:** the price panel behind this backtest is missing stocks
   delisted since late 2022 (docs/research/2026-11-09-panel-survivorship-gap.md). The numbers on
   this page inherit that gap.
+
+## 6. After the panel repair (same evening)
+
+The panel was repaired and both the backtest and this study were run again on the new picks
+(docs/research/2026-11-09-panel-survivorship-gap.md, section 5). The measurements barely moved; the
+backtest they re-price is lower.
+
+| | Section 3, old panel | Repaired panel |
+|---|---|---|
+| Half-spread at 09:35, volatile sessions | 10.9 bp | 10.8 bp |
+| Gained by waiting until 09:35 | +5.7 bp (t 2.8) | +5.7 bp (t 2.8) |
+| Backtest net per cohort, at the assumed 5 bp | +29.7 bp | +24.9 bp |
+| **Net per cohort as the slot trades** | +11.9 bp (t 0.6) | **+7.5 bp (t 0.4)** |
+| Halves | +18.8 / +5.4 | +14.0 / +1.4 |
+
+The repaired numbers are the ones to quote.

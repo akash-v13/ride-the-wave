@@ -49,6 +49,10 @@ class Database:
 
         if not cols("trades"):
             return  # fresh database; schema.sql creates everything
+        fills = cols("portfolio_fills")
+        if fills and "basis" not in fills:  # table from 2026-11-09, before fills could be priced at the auction
+            with c:
+                c.execute("ALTER TABLE portfolio_fills ADD COLUMN basis TEXT NOT NULL DEFAULT 'last'")
         with c:
             for table in ("orders", "trades"):
                 if "strategy" not in cols(table):

@@ -179,8 +179,9 @@ CREATE TABLE IF NOT EXISTS portfolio_fills (
     ts        TEXT NOT NULL,            -- decision time, UTC
     symbol    TEXT NOT NULL,
     qty       REAL NOT NULL,            -- signed: + bought, - sold
-    price     REAL NOT NULL,            -- the simulated fill: last trade plus or minus slippage
-    last      REAL NOT NULL,            -- the last trade the fill was priced from
+    price     REAL NOT NULL,            -- the simulated fill: the reference price plus or minus slippage
+    last      REAL NOT NULL,            -- the reference price the fill was priced from
+    basis     TEXT NOT NULL DEFAULT 'last', -- what the reference is: last trade | auction | open
     bid       REAL,                     -- the quote in the same snapshot; NULL when there was none
     ask       REAL,
     target    REAL                      -- target weight that caused the fill

@@ -91,3 +91,7 @@ when the exposure was above 1.
 evidence lives. This test shows our data agrees with it and that the overlay behaves as designed.
 
 **Next:** a shadow slot running the overlay beside `pm_actives`, so both are observed on the same days.
+
+## 4. Correction, 9 November 2026
+
+The price panel lacked delisted stocks. Repaired and re-run unchanged: information ratio 0.44 for the plain book and 0.39 for the overlay (0.48 and 0.43 above), halves 0.33 / 0.44, worst stretch against SPY −21.6% against −39.9% plain. It still passes. docs/research/2026-11-09-panel-survivorship-gap.md, section 5.

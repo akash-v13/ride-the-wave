@@ -112,11 +112,14 @@ class DailySlot:
         universe: list[str],
         external: dict | None = None,
         quotes: dict[str, tuple[float | None, float | None]] | None = None,
+        fills_at: dict[str, tuple[float, str]] | None = None,
+        sizes_at: dict[str, float] | None = None,
     ) -> list[dict]:
         """Ask the strategy for targets on ``panel`` (history up to and including today) and rebalance.
         ``external`` carries outside series the strategy asked for (``external_series``), such as VIX.
         ``quotes`` is each symbol's (bid, ask) from the same snapshot as ``prices``; it changes no fill
-        and is stored beside each one, so the record can later be re-priced at the real spread."""
+        and is stored beside each one, so the record can later be re-priced at the real spread.
+        ``fills_at`` and ``sizes_at`` are for slots that fill at the opening auction (``rebalance``)."""
         today = str(panel.dates[-1].date())
         self.universe = [s for s in universe if s in panel.close.columns]
         if self.rebalanced_on is not None:
@@ -155,7 +158,7 @@ class DailySlot:
         if gross > self.spec.max_gross and gross > 0:
             targets = {s: v * self.spec.max_gross / gross for s, v in targets.items()}
         self.last_targets = {s: round(v, 4) for s, v in targets.items()}
-        fills = self.rebalance(targets, prices, now)
+        fills = self.rebalance(targets, prices, now, fills_at, sizes_at)
         self.decided_on = today
         self.rebalanced_on = today
         self._save()
@@ -172,7 +175,21 @@ class DailySlot:
         )
         return fills
 
-    def rebalance(self, targets: dict[str, float], prices: dict[str, float], now: datetime) -> list[dict]:
+    def rebalance(
+        self,
+        targets: dict[str, float],
+        prices: dict[str, float],
+        now: datetime,
+        fills_at: dict[str, tuple[float, str]] | None = None,
+        sizes_at: dict[str, float] | None = None,
+    ) -> list[dict]:
+        """Trade to ``targets``. By default each fill is priced at the symbol's current price.
+
+        A slot that fills at the opening auction (``fill_at: open_auction``) passes two more things:
+        - ``fills_at``: per symbol, the price to fill at and what it is ("auction", or "open" when Alpaca
+          has no auction print and the day's first trade stands in);
+        - ``sizes_at``: yesterday's close, which is all an order sent before the open can size itself on.
+        A symbol missing from either falls back to its current price."""
         self.mark(prices)
         eq = self.equity()
         slip = self.spec.slippage_bps / 10_000.0
@@ -184,17 +201,22 @@ class DailySlot:
                     logger.warning("[{}] no price for {}; target skipped", self.spec.id, sym)
                 continue
             w = targets.get(sym, 0.0)
-            target_qty = int(eq * w / px)
+            ref, basis = (fills_at or {}).get(sym) or (px, "last")
+            size_px = (sizes_at or {}).get(sym) or px
+            target_qty = int(eq * w / size_px)
             cur = self.positions[sym].qty if sym in self.positions else 0.0
             delta = target_qty - cur
             if delta == 0:
                 continue
             same_side = cur != 0 and target_qty != 0 and (cur > 0) == (target_qty > 0)
-            if same_side and abs(delta) * px < self.capital * self.dead_band_pct / 100.0:
+            if same_side and abs(delta) * size_px < self.capital * self.dead_band_pct / 100.0:
                 continue
-            fill_px = px * (1 + slip * (1 if delta > 0 else -1))
+            fill_px = ref * (1 + slip * (1 if delta > 0 else -1))
             self._execute(sym, delta, fill_px, now)
-            fills.append({"symbol": sym, "qty": delta, "price": round(fill_px, 4), "target": w, "last": px})
+            fill = {"symbol": sym, "qty": delta, "price": round(fill_px, 4), "target": w, "last": ref, "basis": basis}
+            fills.append(fill)
+        if fills_at:
+            self.mark(prices)  # positions just filled at the open are worth the current price now
         self.last_equity = self.equity()
         return fills
 
@@ -222,6 +244,7 @@ class DailySlot:
                         "qty": f["qty"],
                         "price": f["price"],
                         "last": f["last"],
+                        "basis": f.get("basis", "last"),
                         "bid": bid,
                         "ask": ask,
                         "target": f["target"],

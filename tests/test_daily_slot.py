@@ -162,3 +162,20 @@ def test_rebalance_days_default_still_trades_every_day(db):
                 {"AAA": 110.0}, NOW, ["AAA"])  # fmt: skip
     slot.strategy = Fixed({"AAA": 0.2})
     assert slot.decide(p, {"AAA": 110.0}, NOW, ["AAA"])  # the next session trades again
+
+
+def test_a_slot_can_fill_at_the_opening_auction_and_size_on_yesterdays_close(db):
+    spec = PortfolioSpec(id="pfa", kind="price_momentum", universe="AAA,BBB", slippage_bps=1, fill_at="open_auction")
+    slot = DailySlot(spec, Fixed({"AAA": 0.5, "BBB": -0.5}), db, "live", capital=10_000)
+    now_prices = {"AAA": 110.0, "BBB": 45.0}  # at 09:35
+    fills_at = {"AAA": (108.0, "auction")}  # BBB has no auction print: it falls back to its current price
+    sizes_at = {"AAA": 100.0, "BBB": 50.0}  # yesterday's closes
+    slot.decide(panel(), now_prices, NOW, ["AAA", "BBB"], fills_at=fills_at, sizes_at=sizes_at)
+    rows = {r["symbol"]: r for r in db.fills.for_day("pfa", "2026-09-18")}
+    a, b = rows["AAA"], rows["BBB"]
+    assert a["qty"] == 50 and b["qty"] == -100  # $5,000 a side at yesterday's closes, not at 09:35 prices
+    assert a["basis"] == "auction" and a["last"] == 108.0 and a["price"] == pytest.approx(108.0 * 1.0001)
+    assert b["basis"] == "last" and b["last"] == 45.0 and b["price"] == pytest.approx(45.0 * 0.9999)
+    # bought at the auction, worth the 09:35 price now: the position is marked there straight away
+    assert slot.positions["AAA"].last_price == 110.0
+    assert slot.last_equity == pytest.approx(10_000 + 50 * (110 - 108.0 * 1.0001) - 100 * (45 - 45.0 * 0.9999))

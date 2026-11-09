@@ -558,8 +558,9 @@ class FillRepo(_Repo):
     def insert_many(self, rows: list[dict]) -> None:
         with self.conn:
             self.conn.executemany(
-                """INSERT INTO portfolio_fills (strategy, run_id, day, ts, symbol, qty, price, last, bid, ask, target)
-                   VALUES (:strategy, :run_id, :day, :ts, :symbol, :qty, :price, :last, :bid, :ask, :target)""",
+                """INSERT INTO portfolio_fills
+                     (strategy, run_id, day, ts, symbol, qty, price, last, basis, bid, ask, target)
+                   VALUES (:strategy, :run_id, :day, :ts, :symbol, :qty, :price, :last, :basis, :bid, :ask, :target)""",
                 rows,
             )
 

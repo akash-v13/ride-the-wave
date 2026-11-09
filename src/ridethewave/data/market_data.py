@@ -97,6 +97,33 @@ class SnapshotPoller:
         return out
 
 
+def opening_auctions(client: StockHistoricalDataClient, symbols: Iterable[str], day: date) -> dict[str, float]:
+    """Each symbol's opening auction price on ``day``, for the symbols Alpaca has an opening print for.
+
+    Alpaca's auction history lists every opening print with its size; the largest is the cross on the
+    stock's listing exchange, where an order sent for the open is filled. Some symbols have no print in
+    the history (many NYSE-listed stocks and ARCA-listed ETFs since 2022), so callers need a fallback.
+    A failed request is logged and leaves those symbols out; it never raises."""
+    from ridethewave.daily.costs import auction_price
+
+    symbols = sorted(set(symbols))
+    out: dict[str, float] = {}
+    for i in range(0, len(symbols), 100):
+        params = {"symbols": ",".join(symbols[i : i + 100]), "start": day.isoformat(), "end": day.isoformat()}
+        try:
+            raw = client.get("/stocks/auctions", {**params, "feed": "sip", "limit": 10000})
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "opening auctions failed for {} symbols: {}: {}", len(symbols[i : i + 100]), type(e).__name__, e
+            )
+            continue
+        for sym, days in ((raw or {}).get("auctions") or {}).items():
+            price = auction_price(days[0].get("o") if days else None)
+            if price:
+                out[sym] = price
+    return out
+
+
 class HistoricalBars:
     """Minute bars from Alpaca with a SQLite cache so backtests re-run without re-downloading."""
 

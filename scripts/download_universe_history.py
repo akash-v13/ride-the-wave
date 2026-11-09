@@ -2,9 +2,9 @@
 from 2016, written as parquet chunks under data/daily_panel/. This is the pool point-in-time universes
 are drawn from.
 
-**Not survivorship-free (found 2026-11-09).** Alpaca's list drops a stock when it is delisted, so the
-inactive part covers delistings of about 2018 to 2022 only. Stocks delisted since late 2022, or in
-2016-17, are missing unless they are added by symbol; Alpaca still serves their prices.
+**Not survivorship-free by itself (found 2026-11-09).** Alpaca's list drops a stock when it is delisted,
+so most delisted stocks are missing from what this script downloads. Run scripts/repair_daily_panel.py
+afterwards: it adds them by symbol, which Alpaca still serves.
 docs/research/2026-11-09-panel-survivorship-gap.md.
 
     uv run python scripts/download_universe_history.py --start 2016-01-01 --end 2026-09-22

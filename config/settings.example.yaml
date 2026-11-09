@@ -122,6 +122,9 @@ portfolios:                    # daily-bar portfolios (feature 21): decided once
     max_gross: 3.0             # positive, 2020 and 2025 did most of it. Observation, idle while VIX < 20.
     weight: 50.0               # $500,000 simulated: ~60 names a side per cohort need room for whole shares
     dead_band_pct: 0.1         # $500: a name is 0.4% a cohort; the 1% default skipped every second cohort's add
+    fill_at: open_auction      # since 2026-11-10: fills at each stock's opening auction price, where no spread is
+    slippage_bps: 1.0          # paid, plus 1 bp. With market orders at 09:35 the same picks earned +7.5 bp per cohort,
+                               # at the auction +40.6 (docs/research/2026-11-09-statarb-auction-fills.md)
                                # docs/research/2026-11-02-statarb-volatility-gated.md
 
 options:                       # option structures (feature 22). SHADOW: legs filled against live OPRA quotes, nothing reaches
