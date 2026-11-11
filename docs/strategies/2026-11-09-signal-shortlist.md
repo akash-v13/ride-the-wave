@@ -10,9 +10,10 @@
 > | D. Turn of the month | **Rejected.** +0.8 bp a day since 2006 (t 0.2); it was +14.6 before |
 > | E. Fed announcement days | **Rejected.** +5.8 bp since 2012 (t 0.6); it was +34.3 before |
 > | F. Bounce after an offering | **Fails.** t 0.9; more than half the trades lost |
-> | B. Reversal before earnings | Waiting on report dates |
+> | B. Reversal around earnings | **Fails.** +1.3 bp a trade (t 1.0); halves −32.6 / +35.6 |
+> | G. News carrying related stocks (added 10 Nov) | **Fails, next morning and inside the day.** Next morning −0.1 bp (t 0.5). Five minutes after the headline, to the close: −2.6 bp (t −0.6). The related stocks follow within the same minutes |
 >
-> E, B and F: docs/research/2026-11-10-signals-e-b-f.md. A, C and D run in shadow for observation
+> E and F: docs/research/2026-11-10-signals-e-b-f.md. B and G: docs/research/2026-11-10-signals-b-g.md. A, C and D run in shadow for observation
 > from 11 November (docs/features/26-shortlist-shadow-slots.md). Candidate G, proposed by the owner,
 > is at the end of this page.
 >
@@ -536,3 +537,23 @@ late, over days. These references are from memory and are to be checked before a
 
 **What it would need beyond that.** A live version has to read news during the day. Alpaca's news
 stream and the scoring model are both available; the bot does not use them yet.
+
+**Tested the same evening** (docs/research/2026-11-10-signals-b-g.md, section 6), in a slightly
+different form from the sketch above: every event traded in the news stock's direction, ten related
+stocks, next open to three sessions later. **It fails:** −0.1 bp per event after costs (t 0.5) over
+3,208 events. But the related stocks moved 76 bp in the news stock's direction **on the news day
+itself**. The link is real; the daily version arrives too late. The open question is the one inside
+the day, which needs minute prices and headline times and has not been designed.
+
+**A correction to candidate B above.** The paper behind it (So and Wang 2014) measures the reversal
+over the days around the report, the report day included. "Never hold through it" was this page's
+mistake. The test followed the paper and also reported the out-before version; neither earned
+anything.
+
+**Tested inside the day as well** (docs/research/2026-11-10-signal-g-intraday.md): 747 events where a
+stock moved sharply in the ten minutes around a headline during market hours. Its ten related stocks
+had already moved 22 bp the same way inside those ten minutes, and gave 4 bp more to the close,
+less than the cost of trading them (−2.6 bp net, t −0.6). **Stocks that usually move together are
+linked by the market within minutes.** What remains untested is news that matters for companies
+which never moved with the source before; that cannot be backtested and would have to be recorded
+as it happens.

@@ -28,9 +28,12 @@ COMPANY_TYPES = ("CS", "ADRC")  # common stocks and ADRs; funds, notes, warrants
 MIC = {"XNYS": "NYSE", "XNAS": "NASDAQ", "ARCX": "ARCA", "XASE": "AMEX", "BATS": "BATS"}
 
 
-def massive_delisted(api_key: str, types: tuple[str, ...] = COMPANY_TYPES, pause: float = 13.0) -> pd.DataFrame:
+def massive_delisted(
+    api_key: str, types: tuple[str, ...] = COMPANY_TYPES, pause: float = 13.0, active: bool = False
+) -> pd.DataFrame:
     """Every delisted US stock ticker Massive knows, one row each: ``ticker``, ``name``, ``type``,
-    ``exchange``, ``delisted`` (its last trading date), ``figi``, ``cik``.
+    ``exchange``, ``delisted`` (its last trading date), ``figi``, ``cik``. With ``active`` the listed
+    tickers instead (no delisting date), which is where a current symbol's SEC company number comes from.
 
     The key goes in a header and is never logged. ``pause`` seconds pass between pages, because the free
     plan allows 5 requests a minute; a refusal for going too fast is waited out and asked again."""
@@ -39,7 +42,13 @@ def massive_delisted(api_key: str, types: tuple[str, ...] = COMPANY_TYPES, pause
     rows: list[dict] = []
     for kind in types:
         url: str | None = f"{MASSIVE}/v3/reference/tickers"
-        params: dict | None = {"market": "stocks", "active": "false", "type": kind, "limit": 1000, "sort": "ticker"}
+        params: dict | None = {
+            "market": "stocks",
+            "active": "true" if active else "false",
+            "type": kind,
+            "limit": 1000,
+            "sort": "ticker",
+        }
         pages = 0
         while url:
             r = session.get(url, params=params, timeout=40)
@@ -52,7 +61,9 @@ def massive_delisted(api_key: str, types: tuple[str, ...] = COMPANY_TYPES, pause
             url, params = body.get("next_url"), None  # the next page's address carries its own cursor
             pages += 1
             if pages % 5 == 0:
-                logger.info("delisted {}: {} pages, {} rows so far", kind, pages, len(rows))
+                logger.info(
+                    "{} {}: {} pages, {} rows so far", "listed" if active else "delisted", kind, pages, len(rows)
+                )
             if url:
                 time.sleep(pause)
     frame = pd.DataFrame(rows)
@@ -62,7 +73,10 @@ def massive_delisted(api_key: str, types: tuple[str, ...] = COMPANY_TYPES, pause
             "name": frame.get("name"),
             "type": frame.get("type"),
             "exchange": frame.get("primary_exchange").map(lambda m: MIC.get(m, m)),
-            "delisted": pd.to_datetime(frame.get("delisted_utc"), utc=True, errors="coerce").dt.date,
+            # listed tickers carry no delisting date
+            "delisted": pd.to_datetime(
+                frame.reindex(columns=["delisted_utc"])["delisted_utc"], utc=True, errors="coerce"
+            ).dt.date,
             "figi": frame.get("composite_figi"),
             "cik": frame.get("cik"),
         }

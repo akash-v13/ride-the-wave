@@ -99,3 +99,33 @@ def mean_difference(y: pd.Series, flag: pd.Series, lags: int = 5) -> dict[str, f
         t=float(beta[1] / math.sqrt(var_b)) if var_b > 0 else float("nan"),
     )
     return out
+
+
+def price_at(minutes: np.ndarray, closes: np.ndarray, t: int) -> float:
+    """The last traded price known at minute ``t`` of a session, from minute bars.
+
+    ``minutes`` are the bars' start times in whole minutes since 09:30, oldest first, and ``closes``
+    their closing prices. The bar that starts at minute k ends at k+1, so the price at ``t`` is the
+    close of the latest bar starting before ``t``. NaN when nothing has traded yet."""
+    k = int(np.searchsorted(minutes, t, side="left")) - 1
+    return float(closes[k]) if k >= 0 else float("nan")
+
+
+def news_move(
+    minutes: np.ndarray,
+    closes: np.ndarray,
+    spy_minutes: np.ndarray,
+    spy_closes: np.ndarray,
+    t0: int,
+    beta: float,
+    before: int = 5,
+    after: int = 5,
+) -> float:
+    """A stock's move around a headline published in minute ``t0``, with the market taken out: from
+    ``before`` minutes earlier to ``after`` minutes later, less ``beta`` times SPY's move over the same
+    minutes. Everything in it is known at ``t0 + after``. NaN when either price is missing."""
+    a0, a1 = price_at(minutes, closes, t0 - before), price_at(minutes, closes, t0 + after)
+    s0, s1 = price_at(spy_minutes, spy_closes, t0 - before), price_at(spy_minutes, spy_closes, t0 + after)
+    if not (a0 > 0 and a1 > 0 and s0 > 0 and s1 > 0):
+        return float("nan")
+    return (a1 / a0 - 1) - beta * (s1 / s0 - 1)
