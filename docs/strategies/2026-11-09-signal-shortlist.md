@@ -8,7 +8,13 @@
 > | A. Sector-stress reversal | **Rejected.** −28.6 bp per cohort (t −2.1) |
 > | C. Momentum overnight | **Fails its 4 bp bar by 0.24 bp.** +3.76 bp a night (t 4.3). A lead |
 > | D. Turn of the month | **Rejected.** +0.8 bp a day since 2006 (t 0.2); it was +14.6 before |
-> | B, E, F | Next |
+> | E. Fed announcement days | **Rejected.** +5.8 bp since 2012 (t 0.6); it was +34.3 before |
+> | F. Bounce after an offering | **Fails.** t 0.9; more than half the trades lost |
+> | B. Reversal before earnings | Waiting on report dates |
+>
+> E, B and F: docs/research/2026-11-10-signals-e-b-f.md. A, C and D run in shadow for observation
+> from 11 November (docs/features/26-shortlist-shadow-slots.md). Candidate G, proposed by the owner,
+> is at the end of this page.
 >
 > The owner confirmed on 10 November that the 1.4 target is a yearly Sharpe ratio, ideally above 2.
 
@@ -485,3 +491,48 @@ odds of the six.
 D and E are index bets and will not reach 1.4 by themselves. They are worth testing first because
 they are cheap, they use long histories, and they pay on days chosen by the calendar, which makes
 them unrelated to the stock signals.
+
+---
+
+## Candidate G (added 10 November 2026): news about one company carrying its related stocks
+
+**Proposed by the owner.** Example: a lab announces a new AI model and the chip and infrastructure
+companies rise over the following hours or days. We need not be first; the aim is to enter after the
+move has started and before it has finished. **Nothing below has been tested. This is a proposal,
+and its test still has to be written down in full.**
+
+**Who pays us.** Investors who are slow to work out what news about one company means for another.
+Published work finds this for customers and suppliers (Cohen and Frazzini 2008, "Economic links and
+predictable returns") and for industry leaders and followers (Hou 2007): the related stock moves
+late, over days. These references are from memory and are to be checked before a test.
+
+**What our own results say.**
+- **Against:** news as a signal for the *same* company has failed every test here (357,000 scored
+  headlines). Positive news gave no edge inside the day.
+- **For:** signal A's test, 10 November. In calm markets, when a sector moved sharply, its hardest-hit
+  stocks kept falling and its strongest kept rising over the next five sessions. That is news being
+  absorbed slowly across related stocks. It was seen in a test of the opposite idea, so it is a lead
+  and not a result.
+
+**Three traps to design around.**
+1. **Choosing the basket with hindsight.** Everyone knows today which stocks are "AI infrastructure".
+   The basket has to be built from data available at the time: for example the stocks whose returns
+   moved most closely with the named company's over the year before.
+2. **Assuming the sign.** A new model can be bad for chip makers (January 2025, when a cheaper model
+   sent them down). The rule should follow the related stocks' first move, not assume "release
+   means up".
+3. **Few events.** Major AI releases number a few dozen. A rule about "news of any large company and
+   its related stocks" has thousands of events and can be judged; the AI case is then one use of it.
+
+**A first test that could be run on data we hold.**
+- **Event:** a stock in the 100 most traded has a material, relevant headline (already scored) and
+  moves more than twice its usual daily amount that day.
+- **Related stocks:** the ten whose daily returns followed it most closely over the previous year,
+  the stock itself left out.
+- **Signal:** the related stocks' own move that day, after the market is taken out.
+- **Trade:** if they have moved the same way but less, buy (or short) them at the next open, hedged,
+  for one to three sessions.
+- **Pass:** the usual rule. One configuration, net of costs, t of at least 2, both halves.
+
+**What it would need beyond that.** A live version has to read news during the day. Alpaca's news
+stream and the scoring model are both available; the bot does not use them yet.

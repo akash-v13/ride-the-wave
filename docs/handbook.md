@@ -507,6 +507,9 @@ Six experiments have been run since 17 September 2026. One configuration is thin
 | 10 Nov | Shortlist signal A: residual reversal inside stressed sectors, calm markets | 706 cohorts, 2017-2026, one pre-set test | −28.6 bp per cohort net (t −2.1); negative in both halves | Rejected |
 | 10 Nov | Shortlist signal C: momentum held overnight only | 2,441 nights, top 300 point-in-time, top 30% on 12-1 momentum, close to next open | Winners beat the universe by +3.76 bp a night (t 4.3), every year positive; +1.76 bp after 2 bp of costs (t 2.0), both halves positive | Fails its 4 bp bar by 0.24 bp. A lead, not promoted |
 | 10 Nov | Shortlist signal D: turn of the month | Ken French daily market returns, 1926-2026; 2006 on is unseen by the paper | +14.6 bp a day over 1926-2005 (t 8.0); +0.8 bp over 2006-2026 (t 0.2) | Rejected: gone since publication |
+| 10 Nov | Shortlist signal E: scheduled Fed announcement days | Ken French daily market returns; 271 scheduled dates from the Fed's pages; 2012 on is unseen by the paper | +34.3 bp over 1994-2011 (t 3.4); +5.8 bp over 2012-2026 (t 0.6) | Rejected: gone since publication |
+| 10 Nov | Shortlist signal F: bounce after a share offering | 170 scored offering headlines with a fall of 5% or more, top 100 names, 2019-2026; hedged, five sessions | Average +90.7 bp, median −74.5 bp, t 0.9; one +89% trade makes the average | Fails |
+| 10 Nov | Signals A, C and D in shadow | Slots `sa_sector`, `mom_night`, `tom_spy` from 11 November | No results yet | Observation only: none passed its test |
 
 ### The base strategy's exits, from the base run
 

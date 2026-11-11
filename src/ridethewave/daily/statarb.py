@@ -120,3 +120,93 @@ def cohort_targets(
             total[sym] = total.get(sym, 0.0) + x
         notes.append(f"cohort from {day.date()} (VIX {v:.1f}): {len(longs)} long, {len(shorts)} short")
     return {s: x for s, x in total.items() if abs(x) > 1e-9}, notes
+
+
+def pick_in_stressed_sectors(
+    sig: pd.Series,
+    sectors: pd.Series,
+    stressed: pd.Series,
+    fraction: float = 0.2,
+    min_sector: int = 10,
+    min_side: int = 4,
+) -> tuple[list[str], list[str]]:
+    """Signal A's picks on one day: inside each stressed sector with at least ``min_sector`` ranked
+    stocks, the ``fraction`` with the lowest signal (bought) and the highest (shorted), all sectors
+    pooled. Empty unless at least ``min_side`` names come out on each side."""
+    longs: list[str] = []
+    shorts: list[str] = []
+    s = sig.dropna()
+    for etf in stressed.index[stressed.astype(bool)]:
+        grp = s[sectors.reindex(s.index) == etf]
+        if len(grp) < min_sector:
+            continue
+        pct = grp.rank(pct=True)
+        longs += pct[pct <= fraction].index.tolist()
+        shorts += pct[pct > 1 - fraction].index.tolist()
+    if len(longs) < min_side or len(shorts) < min_side:
+        return [], []
+    return longs, shorts
+
+
+def sector_cohort_targets(
+    close: pd.DataFrame,
+    universe: list[str],
+    vix_close: pd.Series,
+    sector_etfs: list[str],
+    market: str = "SPY",
+    k: int = 5,
+    hold: int = 5,
+    fraction: float = 0.2,
+    side: float = 0.2,
+    calm_below: float = 20.0,
+) -> tuple[dict[str, float], list[str]]:
+    """Signal A (docs/research/2026-11-10-signals-a-c-d.md): the reversal inside stressed sectors on
+    sessions after VIX closed **below** ``calm_below``. Built like ``cohort_targets``: ``close`` holds
+    completed sessions only, each live cohort is rebuilt from history, and the result is the sum of
+    the cohorts still alive with their hedges.
+
+    The rule failed its test (it lost 28.6 bp per cohort, 2017-2026). It runs in shadow at the
+    owner's request, for observation."""
+    from ridethewave.daily.signals import sector_stress
+
+    rets = close.pct_change(fill_method=None)
+    stocks = [s for s in universe if s in rets.columns and s != market and s not in sector_etfs]
+    etfs = [e for e in sector_etfs if e in rets.columns]
+    m = rets[market]
+    sec_r = rets[etfs]
+    sectors = assign_sectors(rets[stocks], m, sec_r)
+    s_i = sector_series(sectors, sec_r)
+    b_m, b_s = rolling_betas(rets[stocks], m, s_i)
+    sig = signal(residuals(rets[stocks], m, s_i, b_m.shift(1), b_s.shift(1)), k)
+    stress = sector_stress(sec_r, m, k)
+    n = len(close)
+    total: dict[str, float] = {}
+    notes: list[str] = []
+    for j in range(n - hold + 1, n + 1):
+        row = j - 1
+        if row < 0:
+            continue
+        day = close.index[row]
+        v = vix_close.get(day)
+        if v is None or pd.isna(v):
+            notes.append(f"{day.date()}: no VIX close, no cohort")
+            continue
+        if v >= calm_below:
+            continue
+        hit = stress.iloc[row]
+        if not hit.any():
+            continue
+        longs, shorts = pick_in_stressed_sectors(sig.iloc[row], sectors.iloc[row], hit, fraction)
+        names = ", ".join(hit.index[hit])
+        if not longs:
+            notes.append(f"{day.date()}: {names} stressed (VIX {v:.1f}) but too few names, no cohort")
+            continue
+        w = cohort_weights(longs, shorts, side)
+        for sym, x in w.items():
+            total[sym] = total.get(sym, 0.0) + x
+        for sym, x in hedge(w, b_m.iloc[row], b_s.iloc[row], sectors.iloc[row]).items():
+            total[sym] = total.get(sym, 0.0) + x
+        notes.append(
+            f"cohort from {day.date()} ({names} stressed, VIX {v:.1f}): {len(longs)} long, {len(shorts)} short"
+        )
+    return {s: x for s, x in total.items() if abs(x) > 1e-9}, notes

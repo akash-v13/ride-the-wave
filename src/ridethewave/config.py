@@ -190,6 +190,11 @@ class PortfolioSpec(_Strict):
     # and no spread is paid (docs/research/2026-11-09-statarb-auction-fills.md); slippage_bps is then
     # the allowance on top. Only for strategies that decide on yesterday's data.
     fill_at: Literal["last", "open_auction"] = "last"
+    # For a book held overnight only (mom_night): at this time each morning the slot sells everything at
+    # the opening auction price, after re-booking yesterday's purchases at yesterday's official close
+    # (they were bought at the decision-time price as a stand-in). None: positions are kept until the
+    # strategy's next decision changes them.
+    flatten_time: time | None = None
     params: dict = Field(default_factory=dict)
 
 

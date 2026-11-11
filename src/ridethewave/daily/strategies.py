@@ -717,6 +717,128 @@ class VolGatedReversal(DailyStrategy):
         return weights
 
 
+# ---------------------------------------------------------------- shortlist signals in shadow (2026-11-10)
+class SectorStressReversalParams(VolGatedReversalParams):
+    """As the VIX rule's, with ``vix_gate`` read the other way: cohorts form only when VIX closed below it."""
+
+
+class SectorStressReversal(DailyStrategy):
+    """Shortlist signal A (docs/research/2026-11-10-signals-a-c-d.md): on sessions after VIX closed below
+    20, inside each sector whose 5-session move beyond SPY is in the top tenth of its last year, buy the
+    fifth of its stocks whose residuals fell most and short the fifth that rose most, hedge, hold 5.
+    It failed its test (-28.6 bp per cohort); in shadow for observation at the owner's request."""
+
+    name = "statarb_sector_stress"
+    params_model = SectorStressReversalParams
+    external_series = ["vix"]
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.extra_symbols = [self.p.market, *self.p.sector_etfs]
+        self.warmup = 252 + 60 + self.p.k + self.p.hold + 2
+
+    def targets(self, w: Window) -> dict[str, float]:
+        from ridethewave.daily.statarb import sector_cohort_targets
+
+        vix = w.external.get("vix")
+        if vix is None or len(vix) == 0:
+            w.log("no VIX history: no cohorts, the book goes to cash")
+            return {}
+        vix_close = vix["close"] if isinstance(vix, pd.DataFrame) else vix
+        close = w.close.iloc[:-1] if self.p.decide_at_open else w.close
+        close = close.iloc[-self.warmup :]
+        p = self.p
+        weights, notes = sector_cohort_targets(
+            close, w.symbols, vix_close, p.sector_etfs, p.market, p.k, p.hold, p.fraction, p.side, p.vix_gate
+        )
+        for line in notes or ["no live cohorts (no stressed sector on a calm day in the last sessions)"]:
+            w.log(line)
+        return weights
+
+
+class OvernightMomentumParams(BaseModel):
+    look: int = Field(252, ge=60, le=504)  # sessions back to the start of the return
+    skip: int = Field(21, ge=0, le=63)  # latest sessions left out
+    fraction: float = Field(0.3, gt=0, le=0.5)
+    min_names: int = Field(30, ge=3)
+    model_config = {"extra": "forbid"}
+
+
+class OvernightMomentum(DailyStrategy):
+    """Shortlist signal C (docs/research/2026-11-10-signals-a-c-d.md): each afternoon buy, in equal
+    weights, the 30% of the universe with the highest twelve-month return (skipping the latest month,
+    using closes up to yesterday). The slot sells everything at the next opening auction
+    (``flatten_time`` in its settings), so the book is held overnight only. The rule beat its universe by
+    3.76 bp a night against a bar of 4; in shadow for observation at the owner's request.
+
+    The last row of the window is today's unfinished bar. It is not used: the ranking for tonight reads
+    closes up to yesterday, as the test did."""
+
+    name = "overnight_momentum"
+    params_model = OvernightMomentumParams
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.warmup = self.p.look + 3
+
+    def targets(self, w: Window) -> dict[str, float]:
+        from ridethewave.daily.signals import momentum_12_1
+
+        cols = [s for s in w.symbols if s in w.close.columns]
+        if len(w.close) < self.warmup or not cols:
+            w.log(f"{len(w.close)} sessions of history, {self.warmup} needed: nothing bought tonight")
+            return {}
+        mom = momentum_12_1(w.close[cols].iloc[-self.warmup :], self.p.look, self.p.skip, lag=1).iloc[-1].dropna()
+        if len(mom) < self.p.min_names:
+            w.log(f"only {len(mom)} stocks have a year of prices: nothing bought tonight")
+            return {}
+        pct = mom.rank(pct=True)
+        winners = pct[pct > 1 - self.p.fraction].index.tolist()
+        w.log(f"{len(winners)} winners of {len(mom)} ranked; weakest winner's 12-1 return {mom[winners].min():+.1%}")
+        return {s: 1.0 / len(winners) for s in winners}
+
+
+class TurnOfMonthParams(BaseModel):
+    symbol: str = "SPY"
+    before: int = Field(1, ge=0, le=5)  # last sessions of the month held
+    after: int = Field(3, ge=0, le=10)  # first sessions of the next month held
+    model_config = {"extra": "forbid"}
+
+
+class TurnOfMonth(DailyStrategy):
+    """Shortlist signal D (docs/research/2026-11-10-signals-a-c-d.md): hold the index over the last
+    trading day of each month and the first three of the next, cash otherwise. Decided near the close:
+    the position is held into tomorrow when tomorrow is a turn day. The effect was +14.6 bp a day until
+    2005 and +0.8 bp since; in shadow for observation at the owner's request.
+
+    Needs the exchange's coming sessions (``Window.external["sessions"]``, from Alpaca's calendar) to
+    know whether tomorrow is the month's last trading day. Without them it keeps what it holds."""
+
+    name = "turn_of_month"
+    params_model = TurnOfMonthParams
+    needs_sessions = True
+
+    def targets(self, w: Window) -> dict[str, float]:
+        from ridethewave.daily.signals import turn_of_month
+
+        sym = self.p.symbol
+        ahead = w.external.get("sessions")
+        keep = {sym: 1.0} if w.held.get(sym, 0) > 0 else {}
+        if ahead is None or len(ahead) == 0:
+            w.log("no trading calendar: keeping the position as it is")
+            return keep
+        future = pd.DatetimeIndex(ahead)
+        future = future[future > w.today]
+        if len(future) < 6:
+            w.log("calendar too short to place tomorrow in its month: keeping the position as it is")
+            return keep
+        sessions = w.close.index[-30:].union(future)
+        tomorrow = future[0]
+        hold = bool(turn_of_month(sessions, self.p.before, self.p.after).loc[tomorrow])
+        w.log(f"next session {tomorrow.date()} is {'a turn day: hold ' + sym if hold else 'not a turn day: cash'}")
+        return {sym: 1.0} if hold else {}
+
+
 # ---------------------------------------------------------------- registry
 DAILY_REGISTRY: dict[str, type[DailyStrategy]] = {
     c.name: c
@@ -736,6 +858,9 @@ DAILY_REGISTRY: dict[str, type[DailyStrategy]] = {
         MovingAverageRule,
         TimeSeriesMomentum,
         VolGatedReversal,
+        SectorStressReversal,
+        OvernightMomentum,
+        TurnOfMonth,
     )
 }
 

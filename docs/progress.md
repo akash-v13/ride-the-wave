@@ -49,8 +49,31 @@ first, then B, E and F.
   `research_overnight_momentum.py`, `research_sector_stress.py`; results in `data/research/signals/`.
 - **Tests:** 216 pass.
 
-**Next:** signals E (Fed days), B (before earnings) and F (share offerings). Owner to decide whether
-C is observed in a shadow slot anyway. Nothing is committed yet.
+**Evening: shadow slots for A, C and D; signals E and F tested.**
+- **PR #4** opened with the day's work; later commits are added to it.
+- **Three observation slots start on 11 November** (docs/features/26-shortlist-shadow-slots.md), at
+  the owner's request. None of the three signals passed its test.
+  - `mom_night` (C): buys about 75 winners at 15:50, sells them at the next opening auction. The
+    purchase is re-booked at the official close the next morning, so the result is close to open.
+    First purchase 11 November, first sale 12 November.
+  - `sa_sector` (A): the mirror of `sa_volrev`; forms cohorts only after a VIX close below 20. The dry
+    run shows two live cohorts (4 and 9 November).
+  - `tom_spy` (D): SPY around each month-end. First purchase due 27 November, **a half day, which no
+    slot handles yet**.
+- **Signal E, Fed announcement days: rejected.** +34.3 bp in the paper's years (t 3.4), +5.8 bp
+  since 2012 (t 0.6).
+- **Signal F, bounce after an offering: fails.** 170 events, average +90.7 bp, median −74.5 bp,
+  t 0.9. One +89% trade makes the average.
+- **Signal B waits on earnings dates.** I tried a public web calendar; it only answers requests that
+  pose as a browser, so I stopped. Proposed instead: the SEC's own filings, which need a contact
+  address from the owner for the request header.
+- **Candidate G** (the owner's idea of news carrying related stocks) is written up at the end of the
+  shortlist as a proposal.
+- **How to check:** `uv run python scripts/run_bot.py --dry-run --no-wait`;
+  `uv run python scripts/research_fed_days.py`; `research_offering_bounce.py`. 224 tests pass.
+
+**Next:** watch the three new slots' first day; the owner's contact address for the SEC, then B;
+the half-day fix before 27 November; whether to write candidate G's test.
 
 ## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
 

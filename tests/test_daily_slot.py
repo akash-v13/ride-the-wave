@@ -179,3 +179,56 @@ def test_a_slot_can_fill_at_the_opening_auction_and_size_on_yesterdays_close(db)
     # bought at the auction, worth the 09:35 price now: the position is marked there straight away
     assert slot.positions["AAA"].last_price == 110.0
     assert slot.last_equity == pytest.approx(10_000 + 50 * (110 - 108.0 * 1.0001) - 100 * (45 - 45.0 * 0.9999))
+
+
+def test_a_book_held_overnight_is_rebooked_at_the_close_then_sold_at_the_opening_auction(db):
+    """mom_night (signal C): bought near the close at a stand-in price, re-booked next morning at the
+    official close, sold at the opening auction. The slot's result is close to open, as the rule was tested."""
+    from datetime import time
+
+    spec = PortfolioSpec(id="night", kind="overnight_momentum", universe="AAA,BBB", slippage_bps=1,
+                         flatten_time=time(9, 35))  # fmt: skip
+    slot = DailySlot(spec, Fixed({"AAA": 0.5, "BBB": 0.5}), db, "live", capital=10_000)
+    evening = datetime(2026, 9, 18, 19, 50, tzinfo=timezone.utc)  # the panel's last day, 15:50 New York
+    slot.decide(panel(), {"AAA": 110.0, "BBB": 45.0}, evening, ["AAA", "BBB"])
+    assert slot.positions["AAA"].qty == 45 and slot.positions["BBB"].qty == 111
+
+    morning = datetime(2026, 9, 21, 13, 35, tzinfo=timezone.utc)
+    fills = slot.sell_at_open(
+        prices={"AAA": 111.5, "BBB": 45.2},
+        now=morning,
+        today="2026-09-21",
+        fills_at={"AAA": (111.0, "auction"), "BBB": (45.3, "open")},
+        closes={"AAA": 110.4, "BBB": 44.9},  # the official closes of the 18th
+        close_day="2026-09-18",
+    )
+    assert not slot.positions and slot.flattened_on == "2026-09-21"
+    assert {f["symbol"]: f["basis"] for f in fills} == {"AAA": "auction", "BBB": "open"}
+    trades = {t.symbol: t for t in slot.trades_today}
+    assert (
+        abs(trades["AAA"].entry_price - 110.4 * 1.0001) < 1e-9 and abs(trades["AAA"].exit_price - 111.0 * 0.9999) < 1e-9
+    )
+    # cash is what close-to-open trading leaves, to the cent: the 15:50 stand-in prices have no effect
+    want = 10_000 + 45 * (111.0 * 0.9999 - 110.4 * 1.0001) + 111 * (45.3 * 0.9999 - 44.9 * 1.0001)
+    assert abs(slot.cash - want) < 1e-6 and abs(slot.last_equity - want) < 1e-6
+    by_basis = {(r["symbol"], r["basis"]): r["price"] for r in db.fills.for_day("night", "2026-09-18")}
+    assert ("AAA", "last") in by_basis and abs(by_basis[("AAA", "close")] - 110.4 * 1.0001) < 1e-3
+
+    # a restart the same day does not sell the evening's purchases again
+    again = DailySlot(spec, Fixed({}), db, "live", capital=10_000)
+    again.load()
+    assert again.flattened_on == "2026-09-21"
+
+
+def test_the_morning_sale_leaves_older_purchases_at_their_price_and_marks_an_empty_day(db):
+    from datetime import time
+
+    spec = PortfolioSpec(id="night2", kind="overnight_momentum", universe="AAA", slippage_bps=0,
+                         flatten_time=time(9, 35))  # fmt: skip
+    slot = DailySlot(spec, Fixed({"AAA": 1.0}), db, "live", capital=10_000)
+    slot.sell_at_open({}, NOW, "2026-09-17", {}, {}, None)  # nothing held: still marked as done
+    assert slot.flattened_on == "2026-09-17" and slot.cash == 10_000
+    slot.decide(panel(), {"AAA": 110.0}, datetime(2026, 9, 18, 19, 50, tzinfo=timezone.utc), ["AAA"])
+    # the bot missed a morning: the close on offer is a later day's, so the purchase keeps its price
+    slot.sell_at_open({"AAA": 112.0}, NOW, "2026-09-24", {"AAA": (112.0, "auction")}, {"AAA": 111.0}, "2026-09-23")
+    assert slot.trades_today[-1].entry_price == 110.0 and slot.trades_today[-1].exit_price == 112.0

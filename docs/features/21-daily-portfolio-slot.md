@@ -31,6 +31,10 @@ comma-separated symbols, or `scan` for the bot's own universe with funds removed
 it on yesterday's close; it is only for strategies that decide on yesterday's data (feature 24). Ids share the same space
 as `strategies:` ids.
 
+`flatten_time` (default none) makes a slot overnight-only: at that time each morning it sells everything
+at the opening auction, after re-booking yesterday's purchases at yesterday's official close. `mom_night`
+uses it (docs/features/26-shortlist-shadow-slots.md).
+
 **How to check.** `uv run python scripts/run_bot.py --dry-run` prints each portfolio's targets as of
 now without saving anything. During a session the heartbeat carries a `portfolios` block (positions,
 shorts, equity, cash, whether today's decision has been made); positions appear in the `positions`

@@ -16,6 +16,7 @@ existed but was ignored until 2026-11-02).
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from loguru import logger
@@ -28,6 +29,12 @@ from ridethewave.portfolio.ledger import build_ledger
 from ridethewave.storage import Database
 
 STATE_KEY = "portfolio:{id}"
+ET = ZoneInfo("America/New_York")
+
+
+def _session_day(ts: datetime) -> str:
+    """The New York date of a fill time (stored in UTC; a time with no zone is taken as it stands)."""
+    return str((ts.astimezone(ET) if ts.tzinfo else ts).date())
 
 
 class DailySlot:
@@ -50,6 +57,7 @@ class DailySlot:
         self.trades_today: list[Trade] = []
         self.decided_on: str | None = None  # YYYY-MM-DD of the last decision
         self.rebalanced_on: str | None = None  # YYYY-MM-DD of the last decision that traded (rebalance_days)
+        self.flattened_on: str | None = None  # YYYY-MM-DD of the last morning sale (spec.flatten_time)
         self.skipped: dict | None = None  # {"day", "reason"} when the last due decision could not be made
         self.last_targets: dict[str, float] = {}
         self.last_equity: float = capital
@@ -68,6 +76,7 @@ class DailySlot:
             self.cash = float(state["cash"])
             self.decided_on = state.get("decided_on")
             self.rebalanced_on = state.get("rebalanced_on")
+            self.flattened_on = state.get("flattened_on")
             self.last_targets = state.get("targets", {})
         if self.positions:
             logger.info("[{}] resumed {} positions, cash ${:,.2f}", self.spec.id, len(self.positions), self.cash)
@@ -85,6 +94,7 @@ class DailySlot:
                 "capital": self.capital,
                 "decided_on": self.decided_on,
                 "rebalanced_on": self.rebalanced_on,
+                "flattened_on": self.flattened_on,
                 "targets": self.last_targets,
                 "equity": self.last_equity,
                 "updated_at": datetime.now().isoformat(),
@@ -218,6 +228,60 @@ class DailySlot:
         if fills_at:
             self.mark(prices)  # positions just filled at the open are worth the current price now
         self.last_equity = self.equity()
+        return fills
+
+    def sell_at_open(
+        self,
+        prices: dict[str, float],
+        now: datetime,
+        today: str,
+        fills_at: dict[str, tuple[float, str]],
+        closes: dict[str, float],
+        close_day: str | None,
+        quotes: dict | None = None,
+    ) -> list[dict]:
+        """The morning half of a book held overnight only (``flatten_time``): sell everything at the
+        opening auction.
+
+        Before selling, each position bought on ``close_day`` (the session before) is re-booked at that
+        day's official close from ``closes``, plus the slot's allowance. It was bought at the price
+        standing at the decision time because the close was not known yet; the rule being observed buys
+        at the close (docs/research/2026-11-10-signals-a-c-d.md). A position bought on any other day
+        (the bot missed a morning) is sold as it stands. Marks today as done even with nothing to sell,
+        so the evening's purchases are not sold again the same day."""
+        slip = self.spec.slippage_bps / 10_000.0
+        rebooked, moves = [], []
+        for sym, pos in self.positions.items():
+            close = closes.get(sym)
+            if not close or close <= 0 or close_day is None or _session_day(pos.entry_time) != close_day:
+                continue
+            new_entry = close * (1 + slip * (1 if pos.qty > 0 else -1))
+            moves.append((new_entry / pos.entry_price - 1) * 1e4)
+            self.cash += pos.qty * (pos.entry_price - new_entry)
+            pos.entry_price = new_entry
+            rebooked.append(
+                {"symbol": sym, "qty": pos.qty, "price": round(new_entry, 4), "target": 0.0, "last": close,
+                 "basis": "close"}
+            )  # fmt: skip
+        if rebooked:
+            logger.info(
+                "[{}] {} of {} purchases re-booked at the {} close: on average {:+.1f} bp against the "
+                "decision-time price",
+                self.spec.id, len(rebooked), len(self.positions), close_day, sum(moves) / len(moves),
+            )  # fmt: skip
+            if self.db is not None:
+                self._record_fills(rebooked, {}, close_day, now)
+        fills = self.rebalance({}, prices, now, fills_at) if self.positions else []
+        self.flattened_on = today
+        self._save()
+        self._record_fills(fills, quotes or {}, today, now)
+        kinds = [f["basis"] for f in fills]
+        logger.info(
+            "[{}] {}: sold {} positions at the open ({} at the auction price, {} at the day's first trade, {} at "
+            "the last trade); equity ${:,.2f}",
+            self.spec.id, today, len(fills), kinds.count("auction"), kinds.count("open"), kinds.count("last"),
+            self.last_equity,
+        )  # fmt: skip
         return fills
 
     def _record_fills(self, fills: list[dict], quotes: dict, today: str, now: datetime) -> None:

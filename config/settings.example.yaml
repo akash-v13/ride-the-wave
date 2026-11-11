@@ -126,6 +126,28 @@ portfolios:                    # daily-bar portfolios (feature 21): decided once
     slippage_bps: 1.0          # paid, plus 1 bp. With market orders at 09:35 the same picks earned +7.5 bp per cohort,
                                # at the auction +40.6 (docs/research/2026-11-09-statarb-auction-fills.md)
                                # docs/research/2026-11-02-statarb-volatility-gated.md
+  - id: sa_sector              # shortlist signal A (2026-11-10), OBSERVATION ONLY: it failed its test (-28.6 bp per cohort,
+    kind: statarb_sector_stress  # t -2.1). On sessions after VIX closed BELOW 20, inside each sector whose 5-session
+    universe: file:config/universes/liquid_stocks_254.txt  # move beyond SPY is in the top tenth of its last year: buy
+    decision_time: "09:35"     # the fifth of its stocks whose residuals fell most, short the fifth that rose most, hedge,
+    max_gross: 3.0             # hold 5 sessions. Same book-keeping as sa_volrev, which trades the other days (VIX >= 20).
+    weight: 50.0               # $500,000 simulated
+    dead_band_pct: 0.1
+    fill_at: open_auction
+    slippage_bps: 1.0          # docs/research/2026-11-10-signals-a-c-d.md, docs/features/26-shortlist-shadow-slots.md
+  - id: mom_night              # shortlist signal C (2026-11-10), OBSERVATION ONLY: winners beat the universe by 3.76 bp a
+    kind: overnight_momentum   # night (t 4.3) against a bar of 4. At 15:50 buy the 30% of the 254 liquid stocks with the
+    universe: file:config/universes/liquid_stocks_254.txt  # highest 12-1 return (closes up to yesterday); at 09:35 the
+    decision_time: "15:50"     # next morning re-book those purchases at the official close and sell everything at the
+    flatten_time: "09:35"      # opening auction. Held overnight only. 1 bp a trade, as the test assumed.
+    weight: 50.0               # $500,000 simulated: about 76 names, $6,500 each
+    dead_band_pct: 0.1
+    slippage_bps: 1.0
+  - id: tom_spy                # shortlist signal D (2026-11-10), OBSERVATION ONLY: the turn of the month earned +14.6 bp
+    kind: turn_of_month        # a day until 2005 and +0.8 bp since. SPY over the last trading day of each month and the
+    universe: spy              # first three of the next, cash otherwise; decided at 15:50 for the next session.
+    weight: 1.0
+    slippage_bps: 1.0
 
 options:                       # option structures (feature 22). SHADOW: legs filled against live OPRA quotes, nothing reaches
                                # Alpaca. Settings from the 2024-26 options backtest (docs/research/2026-09-24-options-backtest.md):
