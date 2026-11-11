@@ -34,7 +34,8 @@ Hedged as in the backtest, with SPY's and the sector ETFs' own gaps.
 - **Exit gap** = the same for the same picks on the exit day, five sessions later.
 - **Auction-priced spread** = the backtest's spread − entry gap + exit gap.
 
-**Amended before the full run: the hedges are not re-priced.** A one-day trial showed that Alpaca's
+**Amended before the full run: the hedges are not re-priced.** (The reason given here was wrong;
+see section 6.) A one-day trial showed that Alpaca's
 auction history has no opening prints for SPY and the sector ETFs in many later years (present in
 2018 and 2020, absent in 2022 and 2025). So the hedge legs stay at the backtest's price, the daily
 open, and only the stocks are re-priced at their auctions. The ETFs' gaps are set to zero. The hedge
@@ -101,7 +102,7 @@ Both are well inside the 3 bp set in advance. The backtest's daily open stands i
 - **Net by year:** 2018 +49, 2019 −18, 2020 +83, 2021 −25, 2022 +14, 2023 +16, 2024 +1,
   2025 +131, 2026 +34.
 
-**Coverage.** Alpaca's auction history had an opening print for 92% of picks: nearly all until 2020,
+**Coverage** (wrong, corrected in section 6: the prints exist). Alpaca's auction history had an opening print for 92% of picks: nearly all until 2020,
 then about three quarters of New York Stock Exchange stocks from 2022 (Nasdaq stocks stay near
 100%). Those stocks did have an opening auction; the history simply lacks the print. Their gap is
 unmeasured and assumed to be like the others'.
@@ -132,3 +133,41 @@ unmeasured and assumed to be like the others'.
   a rule for a stock with no print.
 - **Not proposed:** live orders. That still needs the borrow checks and fill reconciliation listed
   on the feature page.
+
+## 6. Correction, 10 November 2026: the missing prints were a reading error
+
+**Found on the slot's first auction-priced session.** At 09:35 on 10 November only 114 of 266
+symbols were priced at the auction, and every New York Stock Exchange stock was missing. The prints
+were in Alpaca's history. The code was losing them.
+
+**The cause.** A request for one day's auctions can return two rows for a symbol. NYSE- and
+ARCA-listed symbols carry a late closing print stamped 20:00 New York time. In winter that is 01:00
+UTC on the next date, so the day before comes back first, with no opening prints, and the code read
+the first row. It failed from Tuesday to Friday between November and March, for NYSE stocks and
+for the ETFs. Rows are now matched on their own date (`daily/costs.auction_day`), in the bot and in
+the study, with tests.
+
+**What was wrong on this page.**
+- "An opening print for 92% of picks" and "about three quarters of NYSE stocks from 2022": with the
+  corrected reader **99.9%** of picks have a print.
+- "No opening prints for SPY and the sector ETFs in many later years": they have them. The
+  amendment in section 1 rested on this error.
+
+**Re-run, corrected, nothing else changed:**
+
+| | As published | Corrected reader | Corrected, hedges at their auctions too (the design as first written) |
+|---|---|---|---|
+| Picks with a print | 92% | 99.9% | 99.9% |
+| Entry gap, per cohort | +0.0 bp | −0.0 bp | −0.1 bp |
+| Exit gap, per cohort | −0.2 bp | −0.3 bp | −0.3 bp |
+| **Net at the auction** | **+40.6 bp (t 2.0)** | **+40.6 bp (t 2.0)** | **+40.7 bp (t 2.0)** |
+| Halves | +47.7 / +33.7 | +47.5 / +34.0 | +47.6 / +34.0 |
+
+**The verdict does not change.** The published result was right for a wrong reason: the 8% of picks
+it could not price turned out to be like the rest. Old outputs are kept in
+`data/research/statarb/before-dayfix-2026-11-10/`.
+
+**The 10 November session.** 59 fills were booked at the auction price and 52 at the day's first
+trade (the fallback). Against the true auction prices, read afterwards, the fallback fills differed
+by 0 bp at the median and cost the slot about 1 bp of their value in total (about $45). The record
+is left as booked. From 11 November the reader is correct.

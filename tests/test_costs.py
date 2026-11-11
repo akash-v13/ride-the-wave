@@ -61,3 +61,40 @@ def test_auction_price_is_the_largest_opening_print():
     assert auction_price(prints) == 8.51
     assert auction_price([]) is None and auction_price(None) is None
     assert auction_price([{"p": None, "s": 5}, {"p": 3.0, "s": 0}]) is None  # no usable print
+
+
+def test_auction_row_is_matched_on_its_date_not_its_position():
+    """Found 2026-11-10: a one-day request returns the day before first for NYSE and ARCA symbols in
+    winter (a late closing print stamped 01:00 UTC), and reading the first row lost their opening print."""
+    from ridethewave.daily.costs import auction_day, auction_price
+
+    rows = [
+        {"d": "2026-11-09", "o": [], "c": [{"p": 171.0, "s": 100}]},
+        {"d": "2026-11-10", "o": [{"p": 171.27, "s": 95425}, {"p": 171.155, "s": 5}], "c": []},
+    ]
+    assert auction_price(auction_day(rows, "2026-11-10")["o"]) == 171.27
+    assert auction_day(rows, "2026-11-11") is None
+    assert auction_day(None, "2026-11-10") is None and auction_day([], "2026-11-10") is None
+
+
+def test_opening_auctions_reads_the_asked_day_when_the_day_before_comes_first():
+    from datetime import date
+
+    from ridethewave.data.market_data import opening_auctions
+
+    class Client:
+        def get(self, path, params):
+            assert path == "/stocks/auctions"
+            return {
+                "auctions": {
+                    "BA": [
+                        {"d": "2026-11-09", "o": [], "c": [{"p": 170.0, "s": 10}]},
+                        {"d": "2026-11-10", "o": [{"p": 171.27, "s": 95425}]},
+                    ],
+                    "AAPL": [{"d": "2026-11-10", "o": [{"p": 351.36, "s": 439303}, {"p": 351.37, "s": 10}]}],
+                    "LATE": [{"d": "2026-11-09", "o": [{"p": 9.0, "s": 500}]}],  # only the day before
+                }
+            }
+
+    got = opening_auctions(Client(), ["BA", "AAPL", "LATE"], date(2026, 11, 10))
+    assert got == {"BA": 171.27, "AAPL": 351.36}

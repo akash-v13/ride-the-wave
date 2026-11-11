@@ -1,5 +1,17 @@
 # Signal shortlist: six conditional signals to hunt
 
+> **Results so far (10 November 2026)**, in docs/research/2026-11-10-signals-a-c-d.md. The text
+> below is unchanged from before the tests.
+>
+> | Signal | Verdict |
+> |---|---|
+> | A. Sector-stress reversal | **Rejected.** −28.6 bp per cohort (t −2.1) |
+> | C. Momentum overnight | **Fails its 4 bp bar by 0.24 bp.** +3.76 bp a night (t 4.3). A lead |
+> | D. Turn of the month | **Rejected.** +0.8 bp a day since 2006 (t 0.2); it was +14.6 before |
+> | B, E, F | Next |
+>
+> The owner confirmed on 10 November that the 1.4 target is a yearly Sharpe ratio, ideally above 2.
+
 **Written 9 November 2026, before any of the six was tested.** The owner's direction: hunt for
 signals that repeat under stated conditions, each used only when its conditions hold, toward a
 long-term Sharpe ratio of 1.4. This report has four parts:

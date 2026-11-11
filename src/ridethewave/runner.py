@@ -437,7 +437,7 @@ class BotRunner:
         """Where a slot that fills at the opening auction is priced today, and what it sizes on.
 
         - **Fill price:** the stock's opening auction price. When Alpaca has no print for it (a late
-          open, or a gap in its auction history), the day's first trade, which is what the backtest
+          or halted open), the day's first trade, which is what the backtest
           used and which matches the auction on average. Failing both, the slot's usual last trade.
         - **Size:** yesterday's close, all that an order sent before the open could know."""
         auctions = opening_auctions(self.clients.data, snaps, day)

@@ -27,7 +27,7 @@ from loguru import logger
 from research_statarb_costs import ETFS, HALVES, HOLD, START, WORKERS, all_picks, check_against_backtest, client, t_stat
 
 from ridethewave.config import load_settings
-from ridethewave.daily.costs import auction_price, long_short_gap
+from ridethewave.daily.costs import auction_day, auction_price, long_short_gap
 from ridethewave.daily.statarb_data import StatArbInputs, load_inputs
 from ridethewave.storage import Database
 
@@ -35,7 +35,7 @@ OUT = Path(__file__).resolve().parents[1] / "data" / "research" / "statarb"
 AUCTION_BP, HEDGE_BP, BORROW_BP = 1.0, 5.0, 1.0  # allowance per stock trade at the auction; per cohort
 
 
-def session_gaps(day: pd.Timestamp, symbols: set[str]) -> pd.DataFrame:
+def session_gaps(day: pd.Timestamp, symbols: set[str], hedges_at_auction: bool = False) -> pd.DataFrame:
     """Each symbol's opening auction price and unadjusted daily open on one session."""
     syms, d = sorted(symbols), day.strftime("%Y-%m-%d")
     auctions: dict[str, float | None] = {}
@@ -45,7 +45,8 @@ def session_gaps(day: pd.Timestamp, symbols: set[str]) -> pd.DataFrame:
         params = {"symbols": ",".join(part), "start": d, "end": d, "feed": "sip", "limit": 10000}
         raw = client().get("/stocks/auctions", params).get("auctions") or {}
         for sym, days in raw.items():
-            auctions[sym] = auction_price(days[0].get("o") if days else None)
+            row = auction_day(days, d)  # not days[0]: see auction_day (corrected 2026-11-10)
+            auctions[sym] = auction_price(row.get("o") if row else None)
         bars = client().get_stock_bars(
             StockBarsRequest(
                 symbol_or_symbols=part,
@@ -62,13 +63,18 @@ def session_gaps(day: pd.Timestamp, symbols: set[str]) -> pd.DataFrame:
                 opens[sym] = float(rows[0]["o"])
     frame = pd.DataFrame({"auction": pd.Series(auctions, dtype=float), "open": pd.Series(opens, dtype=float)})
     frame["gap"] = frame["auction"] / frame["open"] - 1
-    # Alpaca's auction history has no opening prints for the ARCA-listed ETFs in many later years, so the
-    # hedges are left at the backtest's price: their gap is zero and only the stocks are re-priced.
-    frame.loc[frame.index.isin(ETFS), "gap"] = 0.0
+    # As run on 9 November the hedges stay at the backtest's price (gap zero) and only the stocks are
+    # re-priced. That amendment was made because the ETFs seemed to have no opening prints in later years;
+    # the prints were there and the reader was losing them (auction_day, corrected 2026-11-10).
+    # ``--hedges auction`` runs the design as first written, with the ETFs re-priced too.
+    if not hedges_at_auction:
+        frame.loc[frame.index.isin(ETFS), "gap"] = 0.0
     return frame
 
 
-def measure(inp: StatArbInputs, picks: dict, gated: list[pd.Timestamp]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def measure(
+    inp: StatArbInputs, picks: dict, gated: list[pd.Timestamp], hedges_at_auction: bool = False
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     idx = inp.close.index
     pos = {d: i for i, d in enumerate(idx)}
     exit_day = {d: idx[pos[d] + HOLD] for d in gated if pos[d] + HOLD < len(idx)}
@@ -81,7 +87,9 @@ def measure(inp: StatArbInputs, picks: dict, gated: list[pd.Timestamp]) -> tuple
     sessions = sorted(need)
     logger.info("auction prints and daily opens for {} sessions", len(sessions))
     with ThreadPoolExecutor(WORKERS) as pool:
-        gaps = dict(zip(sessions, pool.map(lambda s: session_gaps(s, need[s]), sessions), strict=True))
+        gaps = dict(
+            zip(sessions, pool.map(lambda s: session_gaps(s, need[s], hedges_at_auction), sessions), strict=True)
+        )
     bm, bs, sectors = inp.b_m.shift(1), inp.b_s.shift(1), inp.sectors.shift(1)
     rows, names = [], []
     for d in gated:
@@ -132,18 +140,20 @@ def summarise(gaps: pd.DataFrame, names: pd.DataFrame, cohorts: pd.DataFrame) ->
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--part", choices=["all", "summary"], default="all")
+    ap.add_argument("--hedges", choices=["open", "auction"], default="open", help="where the ETF hedges are priced")
     args = ap.parse_args()
+    tag = "" if args.hedges == "open" else "_hedges_at_auction"
     cohorts = pd.read_parquet(OUT / "volgated_cohorts_A.parquet")
-    gaps_file, names_file = OUT / "auction_gaps.parquet", OUT / "auction_names.parquet"
+    gaps_file, names_file = OUT / f"auction_gaps{tag}.parquet", OUT / f"auction_names{tag}.parquet"
     if args.part == "all":
         inp = load_inputs(Database(load_settings().storage.resolved_db_path()))
         picks, hedged = all_picks(inp)
         check_against_backtest(picks, hedged, cohorts)
-        gaps, names = measure(inp, picks, list(cohorts.index))
+        gaps, names = measure(inp, picks, list(cohorts.index), args.hedges == "auction")
         gaps.to_parquet(gaps_file)
         names.to_parquet(names_file)
     res = summarise(pd.read_parquet(gaps_file), pd.read_parquet(names_file), cohorts)
-    (OUT / "auction_results.json").write_text(json.dumps(res, indent=1))
+    (OUT / f"auction_results{tag}.json").write_text(json.dumps(res, indent=1))
     for label, r in res.items():
         logger.info("{}: {}", label, {k: round(v, 3) for k, v in r.items()})
     return 0

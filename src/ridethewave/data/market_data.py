@@ -101,10 +101,10 @@ def opening_auctions(client: StockHistoricalDataClient, symbols: Iterable[str], 
     """Each symbol's opening auction price on ``day``, for the symbols Alpaca has an opening print for.
 
     Alpaca's auction history lists every opening print with its size; the largest is the cross on the
-    stock's listing exchange, where an order sent for the open is filled. Some symbols have no print in
-    the history (many NYSE-listed stocks and ARCA-listed ETFs since 2022), so callers need a fallback.
+    stock's listing exchange, where an order sent for the open is filled. A symbol can have no print (a
+    late or halted open, a hole in the history), so callers need a fallback.
     A failed request is logged and leaves those symbols out; it never raises."""
-    from ridethewave.daily.costs import auction_price
+    from ridethewave.daily.costs import auction_day, auction_price
 
     symbols = sorted(set(symbols))
     out: dict[str, float] = {}
@@ -118,7 +118,8 @@ def opening_auctions(client: StockHistoricalDataClient, symbols: Iterable[str], 
             )
             continue
         for sym, days in ((raw or {}).get("auctions") or {}).items():
-            price = auction_price(days[0].get("o") if days else None)
+            row = auction_day(days, day.isoformat())  # not days[0]: see auction_day
+            price = auction_price(row.get("o") if row else None)
             if price:
                 out[sym] = price
     return out

@@ -14,6 +14,44 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-11-10 — Three signals tested: two rejected, one near miss; an auction reading error fixed
+
+**The session.** Clean. Live Wave Rider: 4 trades, −$21.64. `sa_volrev`: $495,275 (+$546 on the
+day), holding the cohorts of 3, 5 and 6 November. The 15:45 recording ran (14,405 assets, 266
+underlyings). PR #3 was merged on 9 November; the machine is back on `main` code, on a new branch
+for this work.
+
+**An error of mine, found on the first auction-priced session.** Only 114 of 266 symbols were
+priced at the auction at 09:35; every NYSE stock fell back to the day's first trade.
+- **Cause:** for NYSE and ARCA symbols Alpaca returns the day before as the first row on winter days
+  (a late closing print stamped after midnight UTC). The reader took the first row.
+- **Fix:** rows are matched on their date. Two tests added.
+- **The study it affected** (9 November) said 92% of picks had a print and that the ETFs had none
+  in later years. Both were this error. Re-run: 99.9% priced, **+40.6 bp per cohort (t 2.0),
+  unchanged**; +40.7 with the hedges at their auctions too. The verdict stands.
+- **Today's fills** are left as booked: the 52 fallback fills differed from the auction by about
+  1 bp of their value in total.
+
+**The owner's answers.** The 1.4 target is a yearly Sharpe ratio, ideally above 2. Test A, C and D
+first, then B, E and F.
+
+**Results** (docs/research/2026-11-10-signals-a-c-d.md; each test was written down first and run once):
+
+| Signal | Result | Verdict |
+|---|---|---|
+| A. Sector-stress reversal | −28.6 bp per cohort in calm markets (t −2.1) | Rejected. Stocks hit hardest in a stressed sector kept falling |
+| C. Momentum held overnight | Winners beat the universe by +3.76 bp a night (t 4.3); +1.76 after costs (t 2.0); both halves positive | Fails its 4 bp bar by 0.24 bp. A lead, not promoted |
+| D. Turn of the month | +14.6 bp a day over 1926-2005 (t 8.0); +0.8 bp over 2006-2026 (t 0.2) | Rejected. Gone since it was published |
+
+- **Worth knowing from C:** winners earned +9.2 bp a night and +0.1 bp a day; the whole universe
+  +5.5 bp a night and +0.8 bp a day. In 2017-2026 the return came overnight.
+- **How to check:** `uv run python scripts/research_turn_of_month.py`,
+  `research_overnight_momentum.py`, `research_sector_stress.py`; results in `data/research/signals/`.
+- **Tests:** 216 pass.
+
+**Next:** signals E (Fed days), B (before earnings) and F (share offerings). Owner to decide whether
+C is observed in a shadow slot anyway. Nothing is committed yet.
+
 ## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
 
 **Asked:** go ahead with the opening-auction test.
