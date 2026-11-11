@@ -43,6 +43,18 @@ def auction_price(prints: list[dict] | None) -> float | None:
     return float(best["p"]) if best else None
 
 
+def auction_day(rows: list[dict] | None, day: str) -> dict | None:
+    """The row for ``day`` (``YYYY-MM-DD``) among the daily rows Alpaca's auction history returns for
+    one symbol.
+
+    A request for one day can return two rows. NYSE- and ARCA-listed symbols carry a late closing print
+    stamped 20:00 New York time, which in winter is 01:00 UTC on the next date, so the day before comes
+    back first, with no opening prints. Reading the first row therefore lost every NYSE and ARCA opening
+    print from Tuesday to Friday between November and March (found on the first live session,
+    2026-11-10). Rows are matched on their own date (``d``) instead."""
+    return next((r for r in rows or [] if r.get("d") == day), None)
+
+
 def open_to_later(bars: pd.DataFrame, later_minute: int = 5) -> float | None:
     """A stock's move from its opening trade to ``later_minute`` minutes after 09:30, from one session's
     minute bars (columns ``minute`` = whole minutes since 09:30, ``open``, ``close``, ``vwap``).

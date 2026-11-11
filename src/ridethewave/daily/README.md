@@ -15,6 +15,8 @@ the benchmark, the equal-weight universe, split halves and an information ratio.
 - `residuals.py`: residual returns for stat arb: each stock's sector ETF chosen monthly from prior data, rolling 60-session betas on SPY and the sector, residuals with lagged betas (2026-11-02). Pure.
 - `costs.py`: cost measurements for the daily books (2026-11-09): time-weighted quoted half-spread from quotes, a stock's move from its opening trade to 09:35 from minute bars, and the long-minus-short hedged gap. Pure.
 - `statarb.py`: the stat-arb cohort rules (signal, picks, equal-dollar weights, beta hedges) and `cohort_targets`, which rebuilds the live cohorts from history for the `statarb_vol_reversal` strategy. Pure. `statarb_data.py` loads the survivorship-free panel the studies share.
+- `signals.py`: conditions and rankings of the shortlist signals (2026-11-10), pure: `turn_of_month` (last session of a month and the first three of the next), `sector_stress` (a sector's five-session move beyond the market against its own last year, judged on earlier days only), `momentum_12_1` as known the day before, and `mean_difference` (flagged days against the rest, Newey-West t).
+  The shadow strategies built on them are in `strategies.py`: `overnight_momentum`, `statarb_sector_stress` (`statarb.sector_cohort_targets`), `turn_of_month` (docs/features/26-shortlist-shadow-slots.md).
 - `universe.py`: named universes (including `trend_etfs_21`) and point-in-time top-N by dollar volume.
 
 Strategies here are pure (no I/O): they see a `Window` of history and return target weights.

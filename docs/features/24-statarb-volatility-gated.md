@@ -102,6 +102,12 @@ earn +40.6 bp per cohort, against +7.5 bp at 09:35
 picks are the same as a decision made before the open. Running it at 09:35 lets the slot read the
 auction prices that have just printed. A live version would send its orders before 09:28 ET.
 
+**First session, 10 November, and a fix.** Only 114 of 266 symbols were priced at the auction; the
+rest fell back to the day's first trade. The prints existed. The reader took the first row Alpaca
+returned, which in winter is the day before for NYSE and ARCA symbols. It now matches rows on their
+date. The 52 fallback fills that day differed from the auction by about 1 bp of their value in
+total and are left as booked (docs/research/2026-11-09-statarb-auction-fills.md, section 6).
+
 **The record changes basis on 10 November.** Fills up to 9 November were booked at 09:35 plus 5 bp.
 
 ## Measured on 9 November 2026: costs and the universe

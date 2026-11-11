@@ -14,6 +14,67 @@ first. The status table in `CLAUDE.md` is the terse version; `docs/handbook.md` 
 | Which strategies are configured? | `config/settings.yaml`, `strategies:` block; `mode: live` trades real paper money, `mode: shadow` only simulates on live prices |
 | Run the tests | `uv run pytest -q` (Python) and `cd web && npm test` (TypeScript) |
 
+## 2026-11-10 — Three signals tested: two rejected, one near miss; an auction reading error fixed
+
+**The session.** Clean. Live Wave Rider: 4 trades, −$21.64. `sa_volrev`: $495,275 (+$546 on the
+day), holding the cohorts of 3, 5 and 6 November. The 15:45 recording ran (14,405 assets, 266
+underlyings). PR #3 was merged on 9 November; the machine is back on `main` code, on a new branch
+for this work.
+
+**An error of mine, found on the first auction-priced session.** Only 114 of 266 symbols were
+priced at the auction at 09:35; every NYSE stock fell back to the day's first trade.
+- **Cause:** for NYSE and ARCA symbols Alpaca returns the day before as the first row on winter days
+  (a late closing print stamped after midnight UTC). The reader took the first row.
+- **Fix:** rows are matched on their date. Two tests added.
+- **The study it affected** (9 November) said 92% of picks had a print and that the ETFs had none
+  in later years. Both were this error. Re-run: 99.9% priced, **+40.6 bp per cohort (t 2.0),
+  unchanged**; +40.7 with the hedges at their auctions too. The verdict stands.
+- **Today's fills** are left as booked: the 52 fallback fills differed from the auction by about
+  1 bp of their value in total.
+
+**The owner's answers.** The 1.4 target is a yearly Sharpe ratio, ideally above 2. Test A, C and D
+first, then B, E and F.
+
+**Results** (docs/research/2026-11-10-signals-a-c-d.md; each test was written down first and run once):
+
+| Signal | Result | Verdict |
+|---|---|---|
+| A. Sector-stress reversal | −28.6 bp per cohort in calm markets (t −2.1) | Rejected. Stocks hit hardest in a stressed sector kept falling |
+| C. Momentum held overnight | Winners beat the universe by +3.76 bp a night (t 4.3); +1.76 after costs (t 2.0); both halves positive | Fails its 4 bp bar by 0.24 bp. A lead, not promoted |
+| D. Turn of the month | +14.6 bp a day over 1926-2005 (t 8.0); +0.8 bp over 2006-2026 (t 0.2) | Rejected. Gone since it was published |
+
+- **Worth knowing from C:** winners earned +9.2 bp a night and +0.1 bp a day; the whole universe
+  +5.5 bp a night and +0.8 bp a day. In 2017-2026 the return came overnight.
+- **How to check:** `uv run python scripts/research_turn_of_month.py`,
+  `research_overnight_momentum.py`, `research_sector_stress.py`; results in `data/research/signals/`.
+- **Tests:** 216 pass.
+
+**Evening: shadow slots for A, C and D; signals E and F tested.**
+- **PR #4** opened with the day's work; later commits are added to it.
+- **Three observation slots start on 11 November** (docs/features/26-shortlist-shadow-slots.md), at
+  the owner's request. None of the three signals passed its test.
+  - `mom_night` (C): buys about 75 winners at 15:50, sells them at the next opening auction. The
+    purchase is re-booked at the official close the next morning, so the result is close to open.
+    First purchase 11 November, first sale 12 November.
+  - `sa_sector` (A): the mirror of `sa_volrev`; forms cohorts only after a VIX close below 20. The dry
+    run shows two live cohorts (4 and 9 November).
+  - `tom_spy` (D): SPY around each month-end. First purchase due 27 November, **a half day, which no
+    slot handles yet**.
+- **Signal E, Fed announcement days: rejected.** +34.3 bp in the paper's years (t 3.4), +5.8 bp
+  since 2012 (t 0.6).
+- **Signal F, bounce after an offering: fails.** 170 events, average +90.7 bp, median −74.5 bp,
+  t 0.9. One +89% trade makes the average.
+- **Signal B waits on earnings dates.** I tried a public web calendar; it only answers requests that
+  pose as a browser, so I stopped. Proposed instead: the SEC's own filings, which need a contact
+  address from the owner for the request header.
+- **Candidate G** (the owner's idea of news carrying related stocks) is written up at the end of the
+  shortlist as a proposal.
+- **How to check:** `uv run python scripts/run_bot.py --dry-run --no-wait`;
+  `uv run python scripts/research_fed_days.py`; `research_offering_bounce.py`. 224 tests pass.
+
+**Next:** watch the three new slots' first day; the owner's contact address for the SEC, then B;
+the half-day fix before 27 November; whether to write candidate G's test.
+
 ## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
 
 **Asked:** go ahead with the opening-auction test.

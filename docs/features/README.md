@@ -27,3 +27,4 @@ One page per feature, in plain English: what it does, how to use it, which setti
 23. [Trend-following sleeve and outside histories (shadow)](23-trend-following-and-outside-data.md)
 24. [Stat arb in volatile markets (shadow)](24-statarb-volatility-gated.md)
 25. [Daily recordings: fill quotes, borrow flags and option quotes](25-market-state-recording.md)
+26. [Shadow slots for shortlist signals A, C and D](26-shortlist-shadow-slots.md): `mom_night` (momentum held overnight: bought at 15:50, re-booked at the close, sold at the next opening auction), `sa_sector` (reversal inside stressed sectors when VIX is below 20), `tom_spy` (turn of the month). Observation only: none passed its test.

@@ -365,6 +365,15 @@ class BotRunner:
         from ridethewave.data import external
 
         out: dict = {}
+        if getattr(ps.strategy, "needs_sessions", False):  # the exchange's coming sessions (turn of the month)
+            try:
+                from alpaca.trading.requests import GetCalendarRequest
+
+                start = datetime.now(ET).date()
+                cal = self.clients.trading.get_calendar(GetCalendarRequest(start=start, end=start + timedelta(days=25)))
+                out["sessions"] = [str(c.date) for c in cal]
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[{}] no trading calendar: {}: {}", ps.spec.id, type(e).__name__, e)
         for name in getattr(ps.strategy, "external_series", []):
             try:
                 external.download(name, timeout=20)
@@ -386,6 +395,13 @@ class BotRunner:
         """At each slot's decision time: adjusted history plus today's bar, then targets, then simulated fills."""
         today = now.astimezone(ET).strftime("%Y-%m-%d")
         for ps in self.portfolios:
+            ft = ps.spec.flatten_time
+            if ft is not None and ps.flattened_on != today and now.astimezone(ET).time() >= ft:
+                try:
+                    self._sell_portfolio_at_open(ps, now, today)
+                except Exception as e:  # noqa: BLE001
+                    logger.exception("[{}] morning sale failed: {}", ps.spec.id, e)
+                    ps.flattened_on = today  # do not retry every tick, and never sell tonight's purchases
             if ps.decided_on == today or now.astimezone(ET).time() < ps.spec.decision_time:
                 continue
             try:
@@ -393,6 +409,19 @@ class BotRunner:
             except Exception as e:  # noqa: BLE001
                 logger.exception("[{}] decision failed: {}", ps.spec.id, e)
                 ps.skip(today, f"decision failed: {type(e).__name__}")  # do not retry every tick
+
+    def _sell_portfolio_at_open(self, ps: DailySlot, now: datetime, today: str) -> None:
+        """A slot with ``flatten_time`` (a book held overnight only): sell what it holds at each stock's
+        opening auction price, after re-booking yesterday's purchases at yesterday's close."""
+        from datetime import date as _date
+
+        snaps = self.poller.poll(list(ps.positions)) if ps.positions else {}
+        prices = {sym: r.tick.price for sym, r in snaps.items() if r.tick.price > 0}
+        quotes = {sym: (r.tick.bid, r.tick.ask) for sym, r in snaps.items()}
+        fills_at, closes = self._open_fills(ps, snaps, _date.fromisoformat(today)) if snaps else ({}, {})
+        days = {r.prev_daily_bar.ts.astimezone(ET).date() for r in snaps.values() if r.prev_daily_bar is not None}
+        close_day = str(max(days)) if days else None
+        ps.sell_at_open(prices, now, today, fills_at, closes, close_day, quotes)
 
     def _decide_portfolio(self, ps: DailySlot, now: datetime, today: str) -> None:
         from datetime import date as _date
@@ -437,7 +466,7 @@ class BotRunner:
         """Where a slot that fills at the opening auction is priced today, and what it sizes on.
 
         - **Fill price:** the stock's opening auction price. When Alpaca has no print for it (a late
-          open, or a gap in its auction history), the day's first trade, which is what the backtest
+          or halted open), the day's first trade, which is what the backtest
           used and which matches the auction on average. Failing both, the slot's usual last trade.
         - **Size:** yesterday's close, all that an order sent before the open could know."""
         auctions = opening_auctions(self.clients.data, snaps, day)
