@@ -512,6 +512,7 @@ Six experiments have been run since 17 September 2026. One configuration is thin
 | 10 Nov | Signals A, C and D in shadow | Slots `sa_sector`, `mom_night`, `tom_spy` from 11 November | No results yet | Observation only: none passed its test |
 | 10 Nov | Shortlist signal B: reversal around earnings | 3,513 trades held through the report, 2017-2026; report days from SEC filings | +1.3 bp net a trade (t 1.0); halves −32.6 / +35.6; no better than ordinary days | Fails |
 | 10 Nov | Candidate G (owner's idea): news about one stock carrying its related stocks | 3,208 events, ten most-correlated stocks, next open for three sessions | −0.1 bp net (t 0.5). The related stocks move +76 bp on the news day itself and 7 bp after | Fails as tested; the question left is inside the day |
+| 10 Nov | Candidate G inside the day | 747 events: a material headline in market hours and a sharp ten-minute move; ten related stocks from five minutes after the headline to the close, minute bars | Related stocks had already moved +21.8 bp inside the window and +4.4 bp after; −2.6 bp net (t −0.6) | Fails: related stocks follow within minutes |
 
 ### The base strategy's exits, from the base run
 

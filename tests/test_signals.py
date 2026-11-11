@@ -116,3 +116,21 @@ def test_sector_stress_picks_only_inside_stressed_sectors_with_enough_names():
     assert longs == ["K00", "K01", "K02", "K03"] and shorts == ["K16", "K17", "K18", "K19"]  # XLU has too few names
     assert pick_in_stressed_sectors(sig, sectors, pd.Series({"XLK": False, "XLF": False, "XLU": True})) == ([], [])
     assert pick_in_stressed_sectors(sig.iloc[:12], sectors.iloc[:12], stressed) == ([], [])  # 2 a side is under 4
+
+
+def test_price_at_and_the_move_around_a_headline_use_only_bars_already_closed():
+    from ridethewave.daily.signals import news_move, price_at
+
+    minutes = np.array([0, 1, 2, 10, 11, 20])  # bar start minutes since 09:30; nothing traded in between
+    closes = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 110.0])
+    assert np.isnan(price_at(minutes, closes, 0))  # no bar has closed at 09:30
+    assert price_at(minutes, closes, 1) == 100.0 and price_at(minutes, closes, 3) == 102.0
+    assert price_at(minutes, closes, 10) == 102.0  # the 09:40 bar is still open at 09:40
+    assert price_at(minutes, closes, 11) == 103.0 and price_at(minutes, closes, 390) == 110.0
+
+    spy_m, spy_c = np.arange(0, 30), np.full(30, 500.0)
+    spy_c[12:] = 505.0  # SPY up 1% by the bar that starts at 09:42
+    # headline in minute 8: from the price at minute 3 (102) to the price at minute 13 (104), less beta x 1%
+    got = news_move(minutes, closes, spy_m, spy_c, t0=8, beta=1.5)
+    assert abs(got - ((104 / 102 - 1) - 1.5 * 0.01)) < 1e-12
+    assert np.isnan(news_move(minutes, closes, spy_m, spy_c, t0=3, beta=1.0))  # no price five minutes before

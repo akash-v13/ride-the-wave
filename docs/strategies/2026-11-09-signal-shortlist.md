@@ -11,7 +11,7 @@
 > | E. Fed announcement days | **Rejected.** +5.8 bp since 2012 (t 0.6); it was +34.3 before |
 > | F. Bounce after an offering | **Fails.** t 0.9; more than half the trades lost |
 > | B. Reversal around earnings | **Fails.** +1.3 bp a trade (t 1.0); halves −32.6 / +35.6 |
-> | G. News carrying related stocks (added 10 Nov) | **Fails as tested.** −0.1 bp (t 0.5); the related stocks move 76 bp on the news day and nothing after |
+> | G. News carrying related stocks (added 10 Nov) | **Fails, next morning and inside the day.** Next morning −0.1 bp (t 0.5). Five minutes after the headline, to the close: −2.6 bp (t −0.6). The related stocks follow within the same minutes |
 >
 > E and F: docs/research/2026-11-10-signals-e-b-f.md. B and G: docs/research/2026-11-10-signals-b-g.md. A, C and D run in shadow for observation
 > from 11 November (docs/features/26-shortlist-shadow-slots.md). Candidate G, proposed by the owner,
@@ -549,3 +549,11 @@ the day, which needs minute prices and headline times and has not been designed.
 over the days around the report, the report day included. "Never hold through it" was this page's
 mistake. The test followed the paper and also reported the out-before version; neither earned
 anything.
+
+**Tested inside the day as well** (docs/research/2026-11-10-signal-g-intraday.md): 747 events where a
+stock moved sharply in the ten minutes around a headline during market hours. Its ten related stocks
+had already moved 22 bp the same way inside those ten minutes, and gave 4 bp more to the close,
+less than the cost of trading them (−2.6 bp net, t −0.6). **Stocks that usually move together are
+linked by the market within minutes.** What remains untested is news that matters for companies
+which never moved with the source before; that cannot be backtested and would have to be recorded
+as it happens.

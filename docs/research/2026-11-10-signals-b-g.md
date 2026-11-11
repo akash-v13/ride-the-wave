@@ -181,7 +181,8 @@ of twice the usual size; 3,208 events after spacing and data checks, on 1,411 da
    between the first stock's move and the related stocks catching up. That is the owner's picture
    ("enter before it starts normalising"). Whether there is a gap to trade there depends on how fast
    the related stocks follow: minutes or hours. The daily data cannot tell.
-3. **The next test, if wanted, is G inside the day** (not designed yet):
+3. **The next test is G inside the day** (run the same night: 2026-11-10-signal-g-intraday.md; it fails,
+   the related stocks follow within minutes). As first sketched here:
    - headlines published while the market is open, with their time;
    - the news stock's move in the first minutes after;
    - the related stocks' move from then to the close, from minute bars;

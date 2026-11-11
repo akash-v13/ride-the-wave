@@ -87,9 +87,21 @@ first, then B, E and F.
 - **How to check:** `uv run python scripts/research_earnings_reversal.py`;
   `research_related_news.py`. 227 tests pass.
 
+**Late night: PR #5 opened; G tested inside the day.**
+- **The owner said go.** Design written first, then minute bars for 12,311 stock-days with a
+  material headline during market hours.
+- **750 events** where the news stock moved at least half its usual day within ten minutes of the
+  headline (149 bp on average).
+- **The related stocks had already moved 22 bp the same way inside those ten minutes.** From five
+  minutes after the headline to the close they gave 4 bp more: −2.6 bp after costs (t −0.6). Fails.
+- **What it means:** stocks that usually move together are linked by the market within minutes. A
+  five-minute delay is already too late, and being faster is a speed contest we do not enter.
+- **How to check:** `uv run python scripts/research_related_news_intraday.py --part summary`.
+  228 tests pass.
+
 **Next:** watch the three new slots' first day (11 November) and `mom_night`'s first morning sale
-(12 November); the half-day fix before 27 November; the owner's decision on testing G inside the
-day.
+(12 November); the half-day fix before 27 November; a second shortlist, drawn from where the tests
+found something (stocks at the auctions, market stress).
 
 ## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
 

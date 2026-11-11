@@ -38,6 +38,26 @@ def material_days(sessions: pd.DatetimeIndex) -> pd.DataFrame:
     return headline_days(sc, sessions)
 
 
+def related(x: np.ndarray, member: np.ndarray, i: int, a: int) -> tuple[np.ndarray, float] | None:
+    """The RELATED universe members whose returns beyond the market (columns of ``x``) followed column
+    ``a``'s most closely over the LOOK sessions before row ``i``, and their average correlation. Uses
+    rows before ``i`` only. None when fewer than RELATED stocks have enough history."""
+    win = x[i - LOOK : i]
+    cand = np.nonzero(member[i])[0]
+    cand = cand[cand != a]
+    own = win[:, a]
+    ok = ~np.isnan(own)
+    corr = np.full(len(cand), np.nan)
+    for k, j in enumerate(cand):
+        both = ok & ~np.isnan(win[:, j])
+        if both.sum() >= MIN_OBS:
+            corr[k] = np.corrcoef(own[both], win[both, j])[0, 1]
+    if np.isfinite(corr).sum() < RELATED:
+        return None
+    best = np.argsort(-np.nan_to_num(corr, nan=-2))[:RELATED]
+    return cand[best], float(corr[best].mean())
+
+
 def block(ev: pd.DataFrame) -> dict:
     if ev.empty:
         return {"events": 0}
@@ -79,19 +99,11 @@ def main() -> int:
         i, a = int(pos[d]), col[sym]
         if i < LOOK or i + 1 + HOLD >= len(sessions):
             continue
-        win = x[i - LOOK : i]  # the year before the event day
-        cand = np.nonzero(member[i])[0]
-        cand = cand[cand != a]
-        own = win[:, a]
-        ok = ~np.isnan(own)
-        corr = np.full(len(cand), np.nan)
-        for k, j in enumerate(cand):
-            both = ok & ~np.isnan(win[:, j])
-            if both.sum() >= MIN_OBS:
-                corr[k] = np.corrcoef(own[both], win[both, j])[0, 1]
-        if np.isfinite(corr).sum() < RELATED:
+        picked = related(x, member, i, a)
+        if picked is None:
             continue
-        basket = cols[cand[np.argsort(-np.nan_to_num(corr, nan=-2))[:RELATED]]]
+        idx, avg_corr = picked
+        basket = cols[idx]
         side = float(np.sign(inp.resid.iat[i, a]))
         entry = sessions[i + 1]
         r = held.loc[entry, basket].mean()
@@ -101,7 +113,7 @@ def main() -> int:
             "symbol": sym, "day": d, "entry": entry, "side": side, "net": side * r - COST,
             "same_day": side * np.nanmean(x[i, [col[b] for b in basket]]),
             "first_day": side * first.loc[entry, basket].mean(), "own": side * held.at[entry, sym],
-            "avg_corr": float(np.sort(corr[np.isfinite(corr)])[-RELATED:].mean()), "basket": ",".join(basket),
+            "avg_corr": avg_corr, "basket": ",".join(basket),
         })  # fmt: skip
     ev = pd.DataFrame(rows)
     ev.to_parquet(OUT / "related_news_events.parquet", index=False)
