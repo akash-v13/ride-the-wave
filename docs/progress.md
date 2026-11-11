@@ -72,8 +72,24 @@ first, then B, E and F.
 - **How to check:** `uv run python scripts/run_bot.py --dry-run --no-wait`;
   `uv run python scripts/research_fed_days.py`; `research_offering_bounce.py`. 224 tests pass.
 
-**Next:** watch the three new slots' first day; the owner's contact address for the SEC, then B;
-the half-day fix before 27 November; whether to write candidate G's test.
+**Night: PR #4 merged; earnings dates from the SEC; signals B and G tested.**
+- **PR #4 merged** and verified on `main`. New work is on branch `signals-b-g`, not committed.
+- **Earnings dates.** With the owner's contact line (kept in `.env` only), report days were read from
+  the SEC's filings: 36,161 reports with the minute each was filed, for 1,031 stocks from 2016.
+- **Signal B, reversal around earnings: fails.** 3,513 trades held through the report: +1.3 bp after
+  costs (t 1.0), negative in the first half. No better than the same picks on ordinary days. The
+  shortlist had described the paper wrongly ("out before the report"); that version earns nothing
+  either.
+- **Signal G, the owner's news idea, daily version: fails, and shows why.** When a stock moves on
+  news, its ten related stocks move 76 bp the same way **that day**, and 7 bp over the next three
+  sessions, which is the cost. The link is real; next morning is too late.
+- **The shortlist is finished:** six tested plus G, none passes, C is the one lead and is in shadow.
+- **How to check:** `uv run python scripts/research_earnings_reversal.py`;
+  `research_related_news.py`. 227 tests pass.
+
+**Next:** watch the three new slots' first day (11 November) and `mom_night`'s first morning sale
+(12 November); the half-day fix before 27 November; the owner's decision on testing G inside the
+day.
 
 ## 2026-11-09 (late) — At the opening auction the stat-arb rule earns +41 bp per cohort, not +8
 

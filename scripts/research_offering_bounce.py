@@ -31,12 +31,9 @@ FALL, COST, MIN_EVENTS = -0.05, 0.0007, 100
 HALVES = {"2019-2022": ("2019-01-01", "2022-12-31"), "2023-2026": ("2023-01-01", "2026-12-31")}
 
 
-def offering_days(sessions: pd.DatetimeIndex) -> pd.DataFrame:
-    """(symbol, day) with at least one offering headline. A headline after 16:00 New York time belongs to
+def headline_days(sc: pd.DataFrame, sessions: pd.DatetimeIndex) -> pd.DataFrame:
+    """(symbol, day) for the scored headlines in ``sc``. A headline after 16:00 New York time belongs to
     the next session, as in the September news study."""
-    sc = pd.read_parquet(NEWS / "scores.parquet", columns=["key", "symbol", "error", "event", "p_relevant", "p_stale"])
-    sc = sc[sc["error"].isna() & (sc["event"] == "offering_or_dilution") & (sc["p_relevant"] > 0.5)]
-    sc = sc[sc["p_stale"] < 0.5]
     sc = sc.join(pd.read_parquet(NEWS / "pairs.parquet").set_index("key")[["created_at"]], on="key")
     et = sc["created_at"].dt.tz_convert("America/New_York")
     local = pd.to_datetime(et.dt.date).to_numpy()
@@ -48,15 +45,22 @@ def offering_days(sessions: pd.DatetimeIndex) -> pd.DataFrame:
     return out.drop_duplicates().reset_index(drop=True)
 
 
-def spaced(events: pd.DataFrame, sessions: pd.DatetimeIndex) -> pd.DataFrame:
-    """Drop a stock's event when it comes within HOLD sessions of the one kept before it."""
+def offering_days(sessions: pd.DatetimeIndex) -> pd.DataFrame:
+    """(symbol, day) with at least one offering headline that is relevant and not stale."""
+    sc = pd.read_parquet(NEWS / "scores.parquet", columns=["key", "symbol", "error", "event", "p_relevant", "p_stale"])
+    sc = sc[sc["error"].isna() & (sc["event"] == "offering_or_dilution") & (sc["p_relevant"] > 0.5)]
+    return headline_days(sc[sc["p_stale"] < 0.5], sessions)
+
+
+def spaced(events: pd.DataFrame, sessions: pd.DatetimeIndex, gap: int = HOLD) -> pd.DataFrame:
+    """Drop a stock's event when it comes within ``gap`` sessions of the one kept before it."""
     pos = pd.Series(np.arange(len(sessions)), index=sessions)
     rows = []
     for sym, g in events.sort_values("day").groupby("symbol"):
         last = -10_000
         for d in g["day"]:
             p = int(pos[d])
-            if p - last > HOLD:
+            if p - last > gap:
                 rows.append((sym, d))
                 last = p
     return pd.DataFrame(rows, columns=["symbol", "day"])

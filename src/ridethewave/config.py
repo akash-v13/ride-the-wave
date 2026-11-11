@@ -314,6 +314,7 @@ class Secrets(BaseSettings):
     # Massive (formerly Polygon.io): used once to backfill the list of delisted stocks (data/delistings.py).
     # The bot never needs it. None or blank = that backfill cannot run.
     massive_api_key: str | None = None
+    sec_contact: str | None = None  # sent to the SEC in each request's User-Agent; private, .env only
 
     @field_validator("alpaca_paper")
     @classmethod

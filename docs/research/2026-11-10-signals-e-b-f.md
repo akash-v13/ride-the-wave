@@ -92,6 +92,9 @@ close. Three sources were considered on 10 November:
 
 The design is written and the test run once the source is settled.
 
+**Done the same evening:** the owner gave a contact line, the dates were read from EDGAR, and B was
+tested. Design and result: 2026-11-10-signals-b-g.md. It fails (+1.3 bp a trade, t 1.0).
+
 ---
 
 ## 5. Results at a glance (run 10 November 2026, after sections 1 to 4)
